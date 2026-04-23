@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Laura's Food 🍅</title>
+  <style>
+    :root {
+      --tomato: #e8472a;
+      --tomato-light: #ff6347;
+      --tomato-pale: #fff0ed;
+      --green: #3a7d44;
+      --green-light: #52a55e;
+      --green-pale: #f0f7f1;
+      --cream: #fdf8f2;
+      --warm-white: #fffcf8;
+      --text-dark: #1a1a1a;
+      --text-mid: #4a4a4a;
+      --text-light: #888;
+      --border: #ede8e0;
+      --shadow: 0 2px 16px rgba(0,0,0,0.07);
+      --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
+      --radius: 16px;
+      --radius-sm: 10px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--cream);
+      color: var(--text-dark);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, var(--tomato) 0%, #c0392b 100%);
+      color: white;
+      padding: 28px 32px 24px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 4px 24px rgba(232,71,42,0.3);
+    }
+
+    .header-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-emoji { font-size: 36px; }
+
+    .logo-text h1 {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .logo-text p {
+      font-size: 13px;
+      opacity: 0.8;
+      margin-top: 1px;
+    }
+
+    .week-badge {
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 50px;
+      padding: 6px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      backdrop-filter: blur(4px);
+    }
+
+    /* ── Nav Tabs ── */
+    nav {
+      background: white;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 97px;
+      z-index: 90;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.04);
+    }
+
+    .nav-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .nav-inner::-webkit-scrollbar { display: none; }
+
+    .tab-btn {
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      padding: 16px 22px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-light);
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .tab-btn:hover { color: var(--tomato); }
+
+    .tab-btn.active {
+      color: var(--tomato);
+      border-bottom-color: var(--tomato);
+    }
+
+    /* ── Main Content ── */
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 24px 80px;
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Section Titles ── */
+    .section-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--text-dark);
+      margin-bottom: 6px;
+    }
+
+    .section-subtitle {
+      font-size: 14px;
+      color: var(--text-light);
+      margin-bottom: 28px;
+    }
+
+    /* ── Overview ── */
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 20px;
+      margin-bottom: 36px;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+
+    .stat-card .icon { font-size: 28px; margin-bottom: 10px; }
+    .stat-card .label { font-size: 12px; color: var(--text-light); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card .value { font-size: 22px; font-weight: 800; color: var(--text-dark); margin-top: 4px; }
+    .stat-card .value span { font-size: 13px; font-weight: 500; color: var(--text-light); }
+
+    .rules-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+
+    @media (max-width: 640px) {
+      .rules-grid { grid-template-columns: 1fr; }
+    }
+
+    .rules-card {
+      background: white;
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+
+    .rules-card h3 {
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .rules-card.must h3 { color: var(--green); }
+    .rules-card.avoid h3 { color: var(--tomato); }
+
+    .rules-card ul { list-style: none; }
+    .rules-card ul li {
+      padding: 6px 0;
+      font-size: 14px;
+      color: var(--text-mid);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .rules-card ul li:last-child { border-bottom: none; }
+
+    .flavor-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .flavor-tag {
+      background: var(--tomato-pale);
+      color: var(--tomato);
+      border-radius: 50px;
+      padding: 5px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid rgba(232,71,42,0.15);
+    }
+
+    /* ── Week Menu ── */
+    .day-selector {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+      margin-bottom: 28px;
+    }
+
+    @media (max-width: 640px) {
+      .day-selector { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    .day-btn {
+      background: white;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 6px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .day-btn:hover { border-color: var(--tomato-light); }
+
+    .day-btn.active {
+      background: var(--tomato);
+      border-color: var(--tomato);
+      color: white;
+    }
+
+    .day-btn .day-short { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; }
+    .day-btn.active .day-short { opacity: 0.85; color: white; }
+    .day-btn .day-emoji { font-size: 18px; margin: 4px 0; }
+    .day-btn .day-name { font-size: 10px; font-weight: 600; }
+
+    .recipe-card {
+      background: white;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .recipe-header {
+      background: linear-gradient(135deg, var(--tomato) 0%, #c0392b 100%);
+      color: white;
+      padding: 28px 32px;
+    }
+
+    .recipe-header .day-label {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      opacity: 0.8;
+      margin-bottom: 8px;
+    }
+
+    .recipe-header h2 { font-size: 26px; font-weight: 800; }
+
+    .recipe-meta {
+      display: flex;
+      gap: 20px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+
+    .meta-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 50px;
+      padding: 5px 14px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .recipe-body {
+      padding: 28px 32px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+    }
+
+    @media (max-width: 700px) {
+      .recipe-body { grid-template-columns: 1fr; padding: 20px; }
+      .recipe-header { padding: 20px; }
+    }
+
+    .recipe-section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--tomato);
+      margin-bottom: 12px;
+    }
+
+    .ingredient-list {
+      list-style: none;
+    }
+
+    .ingredient-list li {
+      padding: 8px 0;
+      font-size: 14px;
+      color: var(--text-mid);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .ingredient-list li:last-child { border-bottom: none; }
+    .ingredient-list li::before { content: "·"; color: var(--tomato); font-size: 18px; line-height: 1; flex-shrink: 0; }
+
+    .steps-list {
+      list-style: none;
+      counter-reset: steps;
+    }
+
+    .steps-list li {
+      counter-increment: steps;
+      padding: 10px 0 10px 40px;
+      font-size: 14px;
+      color: var(--text-mid);
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      line-height: 1.5;
+    }
+
+    .steps-list li:last-child { border-bottom: none; }
+
+    .steps-list li::before {
+      content: counter(steps);
+      position: absolute;
+      left: 0;
+      top: 10px;
+      width: 24px;
+      height: 24px;
+      background: var(--tomato);
+      color: white;
+      border-radius: 50%;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .recipe-tips {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 700px) {
+      .recipe-tips { grid-template-columns: 1fr; }
+    }
+
+    .tip-box {
+      border-radius: var(--radius-sm);
+      padding: 16px 18px;
+      font-size: 13.5px;
+      line-height: 1.5;
+    }
+
+    .tip-box.dressing { background: var(--green-pale); border-left: 3px solid var(--green); }
+    .tip-box.plating { background: var(--tomato-pale); border-left: 3px solid var(--tomato); }
+
+    .tip-box strong { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .tip-box.dressing strong { color: var(--green); }
+    .tip-box.plating strong { color: var(--tomato); }
+
+    /* ── Pantry ── */
+    .pantry-filter {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .filter-btn {
+      background: white;
+      border: 2px solid var(--border);
+      border-radius: 50px;
+      padding: 8px 18px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-mid);
+      transition: all 0.2s;
+    }
+
+    .filter-btn.active { background: var(--tomato); border-color: var(--tomato); color: white; }
+
+    .pantry-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 14px;
+    }
+
+    .pantry-item {
+      background: white;
+      border-radius: var(--radius-sm);
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: var(--shadow);
+      border: 2px solid var(--border);
+      transition: all 0.2s;
+    }
+
+    .pantry-item.empty {
+      border-color: var(--tomato);
+      background: var(--tomato-pale);
+    }
+
+    .pantry-item .item-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-dark);
+      margin-bottom: 3px;
+    }
+
+    .pantry-item .item-status {
+      font-size: 12px;
+      color: var(--text-light);
+    }
+
+    .pantry-item.empty .item-status { color: var(--tomato); font-weight: 600; }
+
+    .toggle-btn {
+      width: 40px;
+      height: 22px;
+      border-radius: 11px;
+      border: none;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.25s;
+      flex-shrink: 0;
+    }
+
+    .toggle-btn.on { background: var(--green); }
+    .toggle-btn.off { background: #ddd; }
+
+    .toggle-btn::after {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: white;
+      top: 3px;
+      transition: all 0.25s;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    }
+
+    .toggle-btn.on::after { left: calc(100% - 19px); }
+    .toggle-btn.off::after { left: 3px; }
+
+    /* ── Shopping List ── */
+    .shopping-header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .btn-primary {
+      background: var(--tomato);
+      color: white;
+      border: none;
+      border-radius: 50px;
+      padding: 10px 22px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(232,71,42,0.25);
+    }
+
+    .btn-primary:hover {
+      background: #c0392b;
+      box-shadow: 0 4px 16px rgba(232,71,42,0.35);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: var(--text-dark);
+      border: 2px solid var(--border);
+      border-radius: 50px;
+      padding: 9px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-secondary:hover { border-color: var(--tomato); color: var(--tomato); }
+
+    .shopping-categories {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+    }
+
+    .shopping-cat {
+      background: white;
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+
+    .shopping-cat h3 {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-light);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .shopping-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+    }
+
+    .shopping-item:last-child { border-bottom: none; }
+
+    .shopping-check {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      border: 2px solid var(--border);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      font-size: 12px;
+      color: white;
+    }
+
+    .shopping-item.checked .shopping-check {
+      background: var(--green);
+      border-color: var(--green);
+    }
+
+    .shopping-item.checked .shopping-check::after { content: '✓'; }
+
+    .shopping-item span {
+      font-size: 14px;
+      color: var(--text-mid);
+      transition: all 0.2s;
+    }
+
+    .shopping-item.checked span {
+      text-decoration: line-through;
+      color: var(--text-light);
+    }
+
+    .pantry-note {
+      margin-top: 28px;
+      padding: 18px 20px;
+      background: var(--green-pale);
+      border-radius: var(--radius-sm);
+      border-left: 4px solid var(--green);
+      font-size: 13.5px;
+      color: var(--text-mid);
+      line-height: 1.5;
+    }
+
+    .pantry-note strong { color: var(--green); }
+
+    /* ── Next Week / AI ── */
+    .ai-section {
+      background: white;
+      border-radius: var(--radius);
+      padding: 32px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+
+    .ai-section h3 {
+      font-size: 18px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .ai-section p {
+      font-size: 14px;
+      color: var(--text-mid);
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    .trigger-box {
+      background: var(--tomato-pale);
+      border: 2px dashed rgba(232,71,42,0.3);
+      border-radius: var(--radius-sm);
+      padding: 20px 24px;
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    .trigger-box .trigger-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--tomato);
+      margin-bottom: 8px;
+    }
+
+    .trigger-box .trigger-phrase {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-dark);
+    }
+
+    .copy-btn {
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: var(--tomato);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .copy-btn:hover { background: #c0392b; }
+
+    .prompt-textarea {
+      width: 100%;
+      height: 240px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      font-size: 13px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      color: var(--text-mid);
+      resize: vertical;
+      line-height: 1.6;
+      background: #fafafa;
+    }
+
+    .prompt-textarea:focus { outline: none; border-color: var(--tomato); }
+
+    .suggestions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .suggestion-chip {
+      background: var(--cream);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--text-mid);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ── Week Summary Table ── */
+    .week-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      margin-bottom: 32px;
+    }
+
+    .week-table th {
+      background: var(--tomato);
+      color: white;
+      padding: 14px 18px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      text-align: left;
+    }
+
+    .week-table td {
+      padding: 14px 18px;
+      font-size: 14px;
+      color: var(--text-mid);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .week-table tr:last-child td { border-bottom: none; }
+    .week-table tr:hover td { background: var(--tomato-pale); cursor: pointer; }
+
+    .week-table td:first-child { font-weight: 700; color: var(--text-dark); }
+
+    .time-badge {
+      display: inline-block;
+      background: var(--green-pale);
+      color: var(--green);
+      border-radius: 50px;
+      padding: 3px 10px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .cook-badge {
+      display: inline-block;
+      background: var(--tomato-pale);
+      color: var(--tomato);
+      border-radius: 50px;
+      padding: 3px 10px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: #1a1a1a;
+      color: white;
+      border-radius: 50px;
+      padding: 12px 24px;
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 999;
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+
+    .toast.show { transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-emoji">🍅</div>
+      <div class="logo-text">
+        <h1>Laura's Food</h1>
+        <p>Restaurant-quality meals · 10 min or less</p>
+      </div>
+    </div>
+    <div class="week-badge" id="week-badge">Week 1</div>
+  </div>
+</header>
+
+<nav>
+  <div class="nav-inner">
+    <button class="tab-btn active" onclick="switchTab('overview')">Overview</button>
+    <button class="tab-btn" onclick="switchTab('menu')">Week 1 Menu</button>
+    <button class="tab-btn" onclick="switchTab('pantry')">Pantry</button>
+    <button class="tab-btn" onclick="switchTab('shopping')">Shopping List</button>
+    <button class="tab-btn" onclick="switchTab('nextweek')">Next Week</button>
+  </div>
+</nav>
+
+<main>
+
+  <!-- ── OVERVIEW ── -->
+  <div id="tab-overview" class="tab-panel active">
+    <div class="section-title">Hello, Laura! 👋</div>
+    <p class="section-subtitle">Your weekly meal plan · healthy, fresh, restaurant-quality · tomatoes in every dish</p>
+
+    <div class="overview-grid">
+      <div class="stat-card">
+        <div class="icon">🍽️</div>
+        <div class="label">This Week</div>
+        <div class="value">7 <span>meals planned</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="icon">⏱️</div>
+        <div class="label">Max Prep Time</div>
+        <div class="value">10 <span>minutes</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="icon">🛒</div>
+        <div class="label">Shopping List</div>
+        <div class="value">13 <span>fresh items</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="icon">🥫</div>
+        <div class="label">Pantry Staples</div>
+        <div class="value">15 <span>items stocked</span></div>
+      </div>
+    </div>
+
+    <div class="rules-grid">
+      <div class="rules-card must">
+        <h3>✅ Must-Have Rules</h3>
+        <ul>
+          <li>🍅 Tomatoes as the star ingredient in every meal</li>
+          <li>⏱️ 10 minutes or less prep time</li>
+          <li>🍽️ Restaurant-quality, beautiful presentation</li>
+          <li>🦐 Fresh or frozen protein (minimal canned)</li>
+          <li>🥚 Boil 4–6 eggs at start of week (save time mid-week)</li>
+        </ul>
+      </div>
+      <div class="rules-card avoid">
+        <h3>🚫 Hard Exclusions</h3>
+        <ul>
+          <li>❌ No chicken nuggets</li>
+          <li>❌ No heavy Caesar salad</li>
+          <li>❌ No repeating meals week-over-week</li>
+          <li>❌ No excess canned protein</li>
+          <li>❌ Pantry staples never on shopping list</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rules-card" style="margin-bottom: 20px;">
+      <h3 style="color: var(--tomato)">💫 Flavor Profiles That Work</h3>
+      <div style="height: 14px;"></div>
+      <div class="flavor-tags">
+        <span class="flavor-tag">Balsamic + Tomato</span>
+        <span class="flavor-tag">Lemon + Seafood</span>
+        <span class="flavor-tag">Dijon Vinaigrette</span>
+        <span class="flavor-tag">Louie Dressing</span>
+        <span class="flavor-tag">Mediterranean Feta</span>
+        <span class="flavor-tag">Lime + Cilantro</span>
+        <span class="flavor-tag">Everything Bagel</span>
+        <span class="flavor-tag">Capers + Salmon</span>
+        <span class="flavor-tag">Greek Yogurt Base</span>
+        <span class="flavor-tag">Avocado + Lime</span>
+      </div>
+    </div>
+
+    <!-- Week at a glance table -->
+    <div class="section-title" style="margin-bottom: 16px;">Week 1 at a Glance</div>
+    <table class="week-table">
+      <thead>
+        <tr>
+          <th>Day</th>
+          <th>Meal</th>
+          <th>Protein</th>
+          <th>Time</th>
+          <th>Cook?</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr onclick="switchTab('menu');setDay(0)">
+          <td>Monday</td>
+          <td>Caprese Tuna Bowl</td>
+          <td>Tuna pouch</td>
+          <td><span class="time-badge">5 min</span></td>
+          <td><span class="cook-badge">No cook</span></td>
+        </tr>
+        <tr onclick="switchTab('menu');setDay(1)">
+          <td>Tuesday</td>
+          <td>Garlic Shrimp &amp; Tomato Salad</td>
+          <td>Frozen shrimp</td>
+          <td><span class="time-badge">8 min</span></td>
+          <td><span class="cook-badge">No cook</span></td>
+        </tr>
+        <tr onclick="switchTab('menu');setDay(2)">
+          <td>Wednesday</td>
+          <td>Salmon, Avocado &amp; Tomato Bowl</td>
+          <td>Fresh salmon</td>
+          <td><span class="time-badge">10 min</span></td>
+          <td>Pan sear</td>
+        </tr>
+        <tr onclick="switchTab('menu');setDay(3)">
+          <td>Thursday</td>
+          <td>Mediterranean Tuna Plate</td>
+          <td>Tuna pouch</td>
+          <td><span class="time-badge">8 min</span></td>
+          <td><span class="cook-badge">No cook</span></td>
+        </tr>
+        <tr onclick="switchTab('menu');setDay(4)">
+          <td>Friday</td>
+          <td>Shrimp Louie Salad</td>
+          <td>Shrimp + eggs</td>
+          <td><span class="time-badge">10 min</span></td>
+          <td>Boil eggs</td>
+        </tr>
+        <tr onclick="switchTab('menu');setDay(5)">
+          <td>Saturday</td>
+          <td>Shrimp Fiesta Bowl</td>
+          <td>Frozen shrimp</td>
+          <td><span class="time-badge">8 min</span></td>
+          <td><span class="cook-badge">No cook</span></td>
+        </tr>
+        <tr onclick="switchTab('menu');setDay(6)">
+          <td>Sunday</td>
+          <td>Salmon Nicoise</td>
+          <td>Fresh salmon</td>
+          <td><span class="time-badge">10 min</span></td>
+          <td>Pan sear</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="padding: 18px 20px; background: var(--tomato-pale); border-radius: var(--radius-sm); border-left: 4px solid var(--tomato); font-size: 13.5px; color: var(--text-mid); line-height: 1.5;">
+      <strong style="color: var(--tomato);">💡 Weekly Prep Tip: </strong>On Sunday, boil 4–6 eggs for the whole week. Keeps 5 days in the fridge. Saves you time for Friday's Shrimp Louie and Sunday's Salmon Nicoise.
+    </div>
+  </div>
+
+  <!-- ── MENU ── -->
+  <div id="tab-menu" class="tab-panel">
+    <div class="section-title">Week 1 Recipes</div>
+    <p class="section-subtitle">Click a day to view its full recipe</p>
+
+    <div class="day-selector" id="day-selector">
+      <button class="day-btn active" onclick="setDay(0)"><div class="day-short">Mon</div><div class="day-emoji">🥗</div><div class="day-name">Caprese</div></button>
+      <button class="day-btn" onclick="setDay(1)"><div class="day-short">Tue</div><div class="day-emoji">🦐</div><div class="day-name">Garlic Shrimp</div></button>
+      <button class="day-btn" onclick="setDay(2)"><div class="day-short">Wed</div><div class="day-emoji">🐟</div><div class="day-name">Salmon Bowl</div></button>
+      <button class="day-btn" onclick="setDay(3)"><div class="day-short">Thu</div><div class="day-emoji">🫒</div><div class="day-name">Mediterranean</div></button>
+      <button class="day-btn" onclick="setDay(4)"><div class="day-short">Fri</div><div class="day-emoji">🥚</div><div class="day-name">Louie Salad</div></button>
+      <button class="day-btn" onclick="setDay(5)"><div class="day-short">Sat</div><div class="day-emoji">🌮</div><div class="day-name">Fiesta Bowl</div></button>
+      <button class="day-btn" onclick="setDay(6)"><div class="day-short">Sun</div><div class="day-emoji">🐠</div><div class="day-name">Nicoise</div></button>
+    </div>
+
+    <div id="recipe-display"></div>
+  </div>
+
+  <!-- ── PANTRY ── -->
+  <div id="tab-pantry" class="tab-panel">
+    <div class="section-title">Pantry Tracker</div>
+    <p class="section-subtitle">Toggle items as empty to add them to next week's shopping list</p>
+
+    <div class="pantry-filter">
+      <button class="filter-btn active" onclick="filterPantry('all', this)">All Items</button>
+      <button class="filter-btn" onclick="filterPantry('stocked', this)">✓ Stocked</button>
+      <button class="filter-btn" onclick="filterPantry('empty', this)">⚠ Empty</button>
+    </div>
+
+    <div class="pantry-grid" id="pantry-grid"></div>
+  </div>
+
+  <!-- ── SHOPPING LIST ── -->
+  <div id="tab-shopping" class="tab-panel">
+    <div class="shopping-header-bar">
+      <div>
+        <div class="section-title">Week 1 Shopping List</div>
+        <p class="section-subtitle">Fresh items only · pantry staples excluded</p>
+      </div>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <button class="btn-secondary" onclick="clearChecked()">Clear Checked</button>
+        <button class="btn-primary" onclick="copyList()">📋 Copy List</button>
+      </div>
+    </div>
+
+    <div class="shopping-categories" id="shopping-categories"></div>
+
+    <div class="pantry-note" id="empty-pantry-note" style="display:none;">
+      <strong>⚠ Pantry items to restock:</strong> <span id="empty-pantry-list"></span>
+    </div>
+
+    <div class="pantry-note">
+      <strong>✓ Do NOT rebuy:</strong> balsamic glaze, dijon mustard, red wine vinegar, olive oil, everything bagel seasoning, ketchup, hot sauce, kalamata olives, capers, salsa, canned corn, canned black beans, canned green beans, garlic powder, salt &amp; pepper — all stocked from Week 1.
+    </div>
+  </div>
+
+  <!-- ── NEXT WEEK ── -->
+  <div id="tab-nextweek" class="tab-panel">
+    <div class="section-title">Generate Week 2</div>
+    <p class="section-subtitle">Use this prompt in Claude, ChatGPT, or any AI tool to get your next week of meals</p>
+
+    <div class="ai-section">
+      <h3>🤖 Trigger Phrase</h3>
+      <p>Copy and send this to Claude.ai or any AI to generate Week 2:</p>
+      <div class="trigger-box">
+        <div class="trigger-label">Say exactly this:</div>
+        <div class="trigger-phrase" id="trigger-phrase">Laura's Food — give me Week 2</div>
+        <button class="copy-btn" onclick="copyTrigger()">Copy</button>
+      </div>
+    </div>
+
+    <div class="ai-section">
+      <h3>📋 Full System Prompt</h3>
+      <p>If starting a new conversation, paste this system prompt first, then use the trigger phrase above:</p>
+      <textarea class="prompt-textarea" id="system-prompt" readonly></textarea>
+      <div style="display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap;">
+        <button class="btn-primary" onclick="copySystemPrompt()">Copy System Prompt</button>
+        <a href="https://claude.ai" target="_blank" rel="noopener"><button class="btn-secondary">Open Claude.ai ↗</button></a>
+      </div>
+    </div>
+
+    <div class="ai-section">
+      <h3>💡 Week 2+ Meal Ideas</h3>
+      <p>These suggestions haven't been used yet. The AI can generate its own ideas too:</p>
+      <div class="suggestions-grid" id="suggestions-grid"></div>
+    </div>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────
+const PANTRY_ITEMS = [
+  "Balsamic glaze", "Dijon mustard", "Red wine vinegar", "Olive oil",
+  "Everything bagel seasoning", "Ketchup", "Hot sauce", "Kalamata olives (jar)",
+  "Capers (jar)", "Salsa (jar)", "Canned corn", "Canned black beans",
+  "Canned green beans", "Garlic powder", "Salt & pepper"
+];
+
+const SHOPPING_LIST = {
+  "🥬 Greens & Herbs": [
+    "Arugula", "Mixed greens", "Baby spinach", "Romaine lettuce", "Fresh basil", "Cilantro"
+  ],
+  "🍅 Tomatoes": [
+    "Cherry tomatoes (2 pints)", "Roma tomatoes (4)", "Tomatoes for Mediterranean (2)"
+  ],
+  "🦐 Proteins": [
+    "Frozen shrimp (bag)", "Fresh salmon (2 fillets)", "Tuna pouches (2–3)"
+  ],
+  "🥑 Fresh Produce": [
+    "Avocados (3)", "Cucumber (1)", "Red onion (1)", "Lemons (3)", "Lime (1)"
+  ],
+  "🧀 Dairy & Eggs": [
+    "Fresh mozzarella pearls", "Feta crumbles", "Greek yogurt", "Eggs (6)"
+  ]
+};
+
+const RECIPES = [
+  {
+    day: "Monday",
+    name: "Caprese Tuna Bowl",
+    time: "5 min",
+    cook: "No cook",
+    emoji: "🥗",
+    protein: "Tuna pouch",
+    ingredients: [
+      "Arugula — 2 handfuls",
+      "Cherry tomatoes, halved",
+      "Mozzarella pearls",
+      "1 tuna pouch",
+      "Fresh basil — 5–6 leaves, torn",
+      "Balsamic glaze — 2 tbsp",
+      "Olive oil — 1 tbsp",
+      "Salt & pepper"
+    ],
+    steps: [
+      "Halve all cherry tomatoes so the juices release into the salad.",
+      "Put arugula in a wide flat bowl. Scatter tomatoes and mozzarella pearls on top.",
+      "Open tuna pouch and flake over in big chunks — don't break up too small.",
+      "Tear basil by hand and scatter. Tearing releases more flavor.",
+      "Drizzle olive oil first, then balsamic glaze in a zigzag. Salt & cracked pepper."
+    ],
+    dressing: "1 tbsp olive oil + 2 tbsp balsamic glaze. No mixing needed.",
+    plating: "Use a wide flat plate — looks beautiful and restaurant-quality."
+  },
+  {
+    day: "Tuesday",
+    name: "Garlic Shrimp & Tomato Salad",
+    time: "8 min",
+    cook: "No cook",
+    emoji: "🦐",
+    protein: "Frozen shrimp",
+    ingredients: [
+      "Mixed greens — 2 handfuls",
+      "8–10 frozen shrimp, thawed",
+      "Roma tomatoes — 2, chopped",
+      "Cucumber — half, sliced",
+      "Red onion — thin rings",
+      "Lemon — half",
+      "Garlic powder — pinch",
+      "Olive oil — 1 tbsp"
+    ],
+    steps: [
+      "Run cold water over frozen shrimp 4–5 minutes. Pat completely dry.",
+      "Dice roma tomatoes, slice cucumber into half-moons, cut thin rings of red onion.",
+      "Lay greens as base. Add tomatoes, cucumber, red onion. Arrange shrimp on top.",
+      "Dust a pinch of garlic powder directly over the shrimp.",
+      "Squeeze half a lemon over everything, drizzle olive oil. Salt and pepper."
+    ],
+    dressing: "½ lemon + 1 tbsp olive oil + pinch of salt.",
+    plating: "Arrange shrimp in a ring around the edge — looks like a restaurant."
+  },
+  {
+    day: "Wednesday",
+    name: "Salmon, Avocado & Tomato Bowl",
+    time: "10 min",
+    cook: "Pan sear",
+    emoji: "🐟",
+    protein: "Fresh salmon",
+    ingredients: [
+      "1 salmon fillet",
+      "Avocado — 1, sliced",
+      "Cherry tomatoes, halved",
+      "Baby spinach — 2 handfuls",
+      "Capers — 1 tbsp",
+      "Lemon — half",
+      "Olive oil — 1 tbsp",
+      "Everything bagel seasoning"
+    ],
+    steps: [
+      "Heat non-stick pan medium-high. Add olive oil. Season salmon with salt & pepper. Cook skin-side down 4 min — don't touch.",
+      "Flip salmon, cook 3–4 more minutes.",
+      "While salmon cooks: halve tomatoes, slice avocado, lay spinach on plate.",
+      "Rest salmon 1 minute on cutting board, then break into large chunks with a fork.",
+      "Build bowl: spinach → tomatoes → avocado → salmon chunks → scatter capers. Squeeze lemon, drizzle olive oil, sprinkle everything bagel seasoning generously."
+    ],
+    dressing: "½ lemon + 1 tbsp olive oil + everything bagel seasoning. Capers add briny punch.",
+    plating: "Layer from base up — let each ingredient show. Restaurant bowl style."
+  },
+  {
+    day: "Thursday",
+    name: "Mediterranean Tuna Plate",
+    time: "8 min",
+    cook: "No cook",
+    emoji: "🫒",
+    protein: "Tuna pouch",
+    ingredients: [
+      "1 tuna pouch",
+      "Tomatoes — 2, rough chopped",
+      "Cucumber — half, diced",
+      "Kalamata olives — small handful",
+      "Feta crumbles — 2 tbsp",
+      "Red onion — thin slices",
+      "Romaine — 2 handfuls",
+      "Red wine vinegar — 1 tbsp",
+      "Olive oil — 1 tbsp"
+    ],
+    steps: [
+      "Chop everything rough and rustic — no need to be precise. That's Mediterranean style.",
+      "Chop romaine into bite-sized pieces. Spread on plate as base.",
+      "Scatter tomatoes, cucumber, red onion, olives. Flake tuna in big chunks on top.",
+      "Sprinkle feta crumbles last — don't toss them in, let them sit on top crumbly.",
+      "Drizzle olive oil + red wine vinegar straight from bottles. Salt and pepper."
+    ],
+    dressing: "1 tbsp olive oil + 1 tbsp red wine vinegar + pinch of dried oregano.",
+    plating: "Rustic and abundant — pile high and let the colors show."
+  },
+  {
+    day: "Friday",
+    name: "Shrimp Louie Salad",
+    time: "10 min",
+    cook: "Boil eggs ahead",
+    emoji: "🥚",
+    protein: "Shrimp + eggs",
+    ingredients: [
+      "8–10 cooked shrimp (thawed)",
+      "2 boiled eggs, halved",
+      "Tomatoes — 2, wedged",
+      "Avocado — 1, sliced",
+      "Romaine — big handful",
+      "Greek yogurt — 3 tbsp",
+      "Ketchup — 1 tbsp",
+      "Lemon squeeze",
+      "Hot sauce — few drops"
+    ],
+    steps: [
+      "Make Louie dressing: 3 tbsp Greek yogurt + 1 tbsp ketchup + squeeze of lemon + few drops hot sauce. Stir with fork.",
+      "Thaw shrimp under cold water 4–5 min. Pat dry.",
+      "Cut tomatoes into wedges. Halve avocado, scoop and slice.",
+      "Lay lettuce on plate. Arrange shrimp, egg halves, tomato wedges, avocado in sections — arranged, not tossed.",
+      "Drizzle Louie dressing over everything. Serve."
+    ],
+    dressing: "3 tbsp Greek yogurt + 1 tbsp ketchup + lemon + hot sauce. Tastes like creamy cocktail sauce.",
+    plating: "Arrange like a clock — shrimp at top, eggs on sides, tomatoes and avocado filling gaps."
+  },
+  {
+    day: "Saturday",
+    name: "Shrimp Fiesta Bowl",
+    time: "8 min",
+    cook: "No cook",
+    emoji: "🌮",
+    protein: "Frozen shrimp",
+    ingredients: [
+      "8–10 cooked shrimp (thawed)",
+      "Cherry tomatoes, halved",
+      "Canned corn — 3–4 tbsp, drained",
+      "Black beans — 3–4 tbsp, rinsed",
+      "Avocado — 1, diced",
+      "Cilantro",
+      "Lime — 1",
+      "Salsa — 2–3 tbsp"
+    ],
+    steps: [
+      "Thaw shrimp under cold water 4–5 min. Pat dry.",
+      "Drain corn. Rinse black beans in strainer under cold water 30 seconds.",
+      "Dice avocado: halve, score flesh in grid while in skin, scoop out with spoon.",
+      "Build in sections: greens → beans → corn → tomatoes → shrimp → avocado.",
+      "Tear cilantro on top. Squeeze lime over everything. Spoon salsa on as dressing."
+    ],
+    dressing: "2–3 tbsp salsa + squeeze of lime. The salsa IS the dressing.",
+    plating: "Section everything in distinct zones — it photographs beautifully."
+  },
+  {
+    day: "Sunday",
+    name: "Salmon Nicoise",
+    time: "10 min",
+    cook: "Pan sear",
+    emoji: "🐠",
+    protein: "Fresh salmon",
+    ingredients: [
+      "1 salmon fillet",
+      "2 boiled eggs, halved",
+      "Cherry/roma tomatoes — handful",
+      "Canned green beans, drained",
+      "Kalamata olives — small handful",
+      "Dijon mustard — 1 tsp",
+      "Olive oil — 2 tbsp",
+      "Red wine vinegar — 1 tbsp"
+    ],
+    steps: [
+      "Make Dijon dressing first: 1 tsp Dijon + 2 tbsp olive oil + 1 tbsp red wine vinegar. Whisk with fork. Set aside.",
+      "Cook salmon: hot pan + olive oil + salt & pepper. 4 min skin-down, flip, 3–4 more min.",
+      "Rest salmon 1 minute, break into large chunks.",
+      "Drain canned green beans — ready to use straight from can.",
+      "Arrange on wide plate in SECTIONS, not tossed: tomatoes / green beans / egg halves / olives / salmon in center. Spoon Dijon dressing evenly over everything."
+    ],
+    dressing: "1 tsp Dijon + 2 tbsp olive oil + 1 tbsp red wine vinegar. Mustard emulsifies it creamy.",
+    plating: "This is the most impressive plate of the week. Arrange in sections like a French restaurant."
+  }
+];
+
+const WEEK2_IDEAS = [
+  "🥗 Shrimp Cobb Salad",
+  "🥭 Salmon Mango Salad",
+  "🍤 Tomato Bruschetta Shrimp Bowl",
+  "🌿 Asian Sesame Salmon Salad",
+  "🌮 Shrimp Taco Salad",
+  "🍞 Panzanella with Shrimp",
+  "🍱 Salmon Poke Bowl Style",
+  "🍜 Tomato Gazpacho with Shrimp",
+  "🇬🇷 Greek Salad with Salmon",
+  "🥑 Avocado Shrimp Stack"
+];
+
+const SYSTEM_PROMPT = `You are Laura's personal meal planner. Your job is to generate weekly healthy meal menus for Laura based on her preferences, pantry, and eating history.
+
+LAURA'S PROFILE:
+- Goal: healthy eating, weight loss, restaurant-quality meals
+- Loves: tomatoes (STAR ingredient), shrimp, salmon, avocado, Mediterranean/Greek, caprese, balsamic, feta, mozzarella, Louie dressing, fiesta bowl style
+- Avoid: chicken nuggets, heavy Caesar salad, too much canned protein
+- Max prep: 10 minutes per meal
+- Protein: fresh or frozen preferred (tuna pouches ok as backup)
+- Presentation: meals must look restaurant-quality and be arranged beautifully
+
+PANTRY STAPLES — NEVER include in shopping list:
+balsamic glaze, dijon mustard, red wine vinegar, olive oil, everything bagel seasoning, ketchup, hot sauce, kalamata olives, capers, salsa, canned corn, canned black beans, canned green beans, garlic powder, salt, pepper
+
+MEALS ALREADY EATEN — never repeat:
+Week 1: Caprese Tuna Bowl, Garlic Shrimp & Tomato Salad, Salmon Avocado Bowl, Mediterranean Tuna Plate, Shrimp Louie Salad, Shrimp Fiesta Bowl, Salmon Nicoise
+
+WHEN ASKED 'Laura's Food — give me Week N':
+1. Generate 7 new meals (Mon–Sun), none repeated from prior weeks
+2. Every meal must feature tomatoes prominently
+3. Stick to shrimp and salmon (tuna pouch as occasional backup)
+4. For each meal: name, time, cook method, ingredients, step-by-step instructions, dressing, plating tip
+5. Output a shopping list of ONLY fresh items — never include pantry staples
+6. Add a weekly prep tip
+
+OUTPUT: Day-by-day menu table → Full recipes → Shopping list`;
+
+// ── State ─────────────────────────────────────────────────────────────
+let pantryState = JSON.parse(localStorage.getItem('pantryState') || '{}');
+let shoppingChecked = JSON.parse(localStorage.getItem('shoppingChecked') || '{}');
+let currentDay = 0;
+let currentFilter = 'all';
+
+function saveState() {
+  localStorage.setItem('pantryState', JSON.stringify(pantryState));
+  localStorage.setItem('shoppingChecked', JSON.stringify(shoppingChecked));
+}
+
+// ── Tab Switching ─────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  const tabOrder = ['overview', 'menu', 'pantry', 'shopping', 'nextweek'];
+  document.querySelectorAll('.tab-btn')[tabOrder.indexOf(name)].classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── Recipe Rendering ──────────────────────────────────────────────────
+function setDay(idx) {
+  currentDay = idx;
+  document.querySelectorAll('.day-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+  renderRecipe(RECIPES[idx]);
+}
+
+function renderRecipe(r) {
+  document.getElementById('recipe-display').innerHTML = `
+    <div class="recipe-card">
+      <div class="recipe-header">
+        <div class="day-label">${r.day}</div>
+        <h2>${r.emoji} ${r.name}</h2>
+        <div class="recipe-meta">
+          <div class="meta-pill">⏱ ${r.time}</div>
+          <div class="meta-pill">🍳 ${r.cook}</div>
+          <div class="meta-pill">🥩 ${r.protein}</div>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div>
+          <div class="recipe-section-title">Ingredients</div>
+          <ul class="ingredient-list">
+            ${r.ingredients.map(i => `<li>${i}</li>`).join('')}
+          </ul>
+        </div>
+        <div>
+          <div class="recipe-section-title">Steps</div>
+          <ol class="steps-list">
+            ${r.steps.map(s => `<li>${s}</li>`).join('')}
+          </ol>
+        </div>
+        <div class="recipe-tips">
+          <div class="tip-box dressing">
+            <strong>🥗 Dressing</strong>
+            ${r.dressing}
+          </div>
+          <div class="tip-box plating">
+            <strong>🍽 Plating Tip</strong>
+            ${r.plating}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ── Pantry ────────────────────────────────────────────────────────────
+function renderPantry() {
+  const grid = document.getElementById('pantry-grid');
+  const items = PANTRY_ITEMS.filter(item => {
+    const isEmpty = pantryState[item];
+    if (currentFilter === 'stocked') return !isEmpty;
+    if (currentFilter === 'empty') return isEmpty;
+    return true;
+  });
+
+  grid.innerHTML = items.map(item => {
+    const isEmpty = pantryState[item];
+    return `
+      <div class="pantry-item ${isEmpty ? 'empty' : ''}">
+        <div>
+          <div class="item-name">${item}</div>
+          <div class="item-status">${isEmpty ? '⚠ Marked empty — add to list' : '✓ Stocked — do not rebuy'}</div>
+        </div>
+        <button class="toggle-btn ${isEmpty ? 'off' : 'on'}" onclick="togglePantry('${item.replace(/'/g, "\\'")}')"></button>
+      </div>
+    `;
+  }).join('');
+}
+
+function togglePantry(item) {
+  pantryState[item] = !pantryState[item];
+  saveState();
+  renderPantry();
+  renderShoppingList();
+  showToast(pantryState[item] ? `${item} marked as empty` : `${item} back in stock`);
+}
+
+function filterPantry(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderPantry();
+}
+
+// ── Shopping List ─────────────────────────────────────────────────────
+function renderShoppingList() {
+  const container = document.getElementById('shopping-categories');
+  container.innerHTML = Object.entries(SHOPPING_LIST).map(([cat, items]) => `
+    <div class="shopping-cat">
+      <h3>${cat}</h3>
+      ${items.map(item => {
+        const key = item;
+        const checked = shoppingChecked[key];
+        return `
+          <div class="shopping-item ${checked ? 'checked' : ''}" onclick="toggleShopping('${item.replace(/'/g, "\\'")}')">
+            <div class="shopping-check"></div>
+            <span>${item}</span>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `).join('');
+
+  // Show empty pantry items
+  const emptyItems = PANTRY_ITEMS.filter(i => pantryState[i]);
+  const note = document.getElementById('empty-pantry-note');
+  if (emptyItems.length > 0) {
+    note.style.display = 'block';
+    document.getElementById('empty-pantry-list').textContent = emptyItems.join(', ');
+  } else {
+    note.style.display = 'none';
+  }
+}
+
+function toggleShopping(item) {
+  shoppingChecked[item] = !shoppingChecked[item];
+  saveState();
+  renderShoppingList();
+}
+
+function clearChecked() {
+  shoppingChecked = {};
+  saveState();
+  renderShoppingList();
+  showToast('Shopping list reset');
+}
+
+function copyList() {
+  let text = 'LAURA\'S FOOD — WEEK 1 SHOPPING LIST\n\n';
+  Object.entries(SHOPPING_LIST).forEach(([cat, items]) => {
+    text += cat + '\n';
+    items.forEach(item => { text += `  • ${item}\n`; });
+    text += '\n';
+  });
+  const emptyItems = PANTRY_ITEMS.filter(i => pantryState[i]);
+  if (emptyItems.length > 0) {
+    text += 'PANTRY RESTOCKS:\n';
+    emptyItems.forEach(i => { text += `  • ${i}\n`; });
+  }
+  navigator.clipboard.writeText(text).then(() => showToast('Shopping list copied!'));
+}
+
+// ── Next Week ─────────────────────────────────────────────────────────
+function renderNextWeek() {
+  document.getElementById('system-prompt').value = SYSTEM_PROMPT;
+
+  document.getElementById('suggestions-grid').innerHTML = WEEK2_IDEAS.map(idea => `
+    <div class="suggestion-chip">${idea}</div>
+  `).join('');
+}
+
+function copyTrigger() {
+  navigator.clipboard.writeText("Laura's Food — give me Week 2")
+    .then(() => showToast('Trigger phrase copied!'));
+}
+
+function copySystemPrompt() {
+  navigator.clipboard.writeText(SYSTEM_PROMPT)
+    .then(() => showToast('System prompt copied!'));
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────
+renderRecipe(RECIPES[0]);
+renderPantry();
+renderShoppingList();
+renderNextWeek();
+</script>
+</body>
+</html>
