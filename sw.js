@@ -2,7 +2,7 @@
 // Network-first strategy: always try network for fresh data,
 // fall back to cache when offline.
 
-const CACHE_VERSION = 'lauras-food-v3';
+const CACHE_VERSION = 'lauras-food-v4';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -35,6 +35,7 @@ self.addEventListener('fetch', (event) => {
 
   // Never cache Supabase or AI API calls — those must always be live
   if (url.hostname.includes('supabase.co') ||
+      url.hostname.includes('openai.com') ||
       url.hostname.includes('anthropic.com')) {
     return;
   }

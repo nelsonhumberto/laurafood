@@ -1,16 +1,20 @@
 // ═══════════════════════════════════════════════════════════════════════
-// Laura's Food — AI Edge Function
-// Proxies Anthropic Claude API calls so the API key stays server-side.
+// Laura's Food — AI Edge Function (OpenAI GPT-4o)
+//
+// Proxies OpenAI Chat Completions so the API key stays server-side.
+// Two actions:
+//   - photo_to_pantry  (vision)  : photo -> [{name, qty, unit, emoji, is_staple}]
+//   - create_meal      (text)    : pantry + profile + history -> recipe JSON
 //
 // Deploy:
 //   supabase login
 //   supabase link --project-ref qdhqkcsfslkbhxtogjfp
-//   supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+//   supabase secrets set OPENAI_API_KEY=sk-...
 //   supabase functions deploy ai --no-verify-jwt
 // ═══════════════════════════════════════════════════════════════════════
 
-const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
-const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
+const OPENAI_MODEL  = 'gpt-4o';        // vision-capable, great at JSON
+const OPENAI_API    = 'https://api.openai.com/v1/chat/completions';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,45 +29,49 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function callClaude(messages: any[], maxTokens = 2000) {
-  const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set in secrets');
+async function callOpenAI(messages: any[], opts: { maxTokens?: number; jsonMode?: boolean } = {}) {
+  const apiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!apiKey) throw new Error('OPENAI_API_KEY not set in secrets');
 
-  const res = await fetch(ANTHROPIC_API, {
+  const body: Record<string, unknown> = {
+    model: OPENAI_MODEL,
+    messages,
+    max_tokens: opts.maxTokens ?? 2500,
+    temperature: 0.7,
+  };
+  if (opts.jsonMode) body.response_format = { type: 'json_object' };
+
+  const res = await fetch(OPENAI_API, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
+      'Authorization': `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: maxTokens,
-      messages,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Claude API ${res.status}: ${text}`);
+    throw new Error(`OpenAI API ${res.status}: ${text}`);
   }
 
   const data = await res.json();
-  return data.content[0].text;
+  return data.choices[0].message.content as string;
 }
 
-// Best-effort JSON extraction (Claude may wrap in code fences or prose)
+// Best-effort JSON extraction (model may wrap in code fences or prose
+// when not in json_mode, e.g. when returning a top-level array).
 function extractJSON(text: string): any {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   const candidate = fenced ? fenced[1] : text;
   try { return JSON.parse(candidate.trim()); } catch {}
 
-  // Try first { ... } block
-  const start = candidate.indexOf('{');
+  const startO = candidate.indexOf('{');
   const startA = candidate.indexOf('[');
-  const head = (startA !== -1 && (start === -1 || startA < start)) ? startA : start;
+  const head = (startA !== -1 && (startO === -1 || startA < startO)) ? startA : startO;
   if (head === -1) throw new Error('No JSON found in response');
-  const tail = candidate.lastIndexOf(head === startA ? ']' : '}');
+  const closer = candidate[head] === '[' ? ']' : '}';
+  const tail = candidate.lastIndexOf(closer);
   return JSON.parse(candidate.slice(head, tail + 1));
 }
 
@@ -72,54 +80,67 @@ async function actionPhotoToPantry(payload: any) {
   const { image_base64, image_type } = payload;
   if (!image_base64) throw new Error('Missing image_base64');
 
-  const text = await callClaude([{
-    role: 'user',
-    content: [
-      {
-        type: 'image',
-        source: {
-          type: 'base64',
-          media_type: image_type || 'image/jpeg',
-          data: image_base64,
+  const dataUrl = `data:${image_type || 'image/jpeg'};base64,${image_base64}`;
+
+  const text = await callOpenAI([
+    {
+      role: 'system',
+      content: 'You are a vision assistant that catalogs food and grocery items in photos. You ALWAYS respond with valid JSON only — no prose, no markdown.'
+    },
+    {
+      role: 'user',
+      content: [
+        {
+          type: 'image_url',
+          image_url: { url: dataUrl, detail: 'high' }
         },
-      },
-      {
-        type: 'text',
-        text: `You are looking at a photo of food/grocery items. Identify each distinct item visible in the image and return ONLY a valid JSON array — no prose, no markdown.
+        {
+          type: 'text',
+          text: `Identify each distinct food / grocery item in this photo and return JSON in this exact shape:
 
-For each item include:
-- name: short descriptive name (e.g. "Cherry tomatoes")
+{
+  "items": [
+    {
+      "name": "Cherry tomatoes",
+      "qty": 1,
+      "unit": "pint",
+      "emoji": "🍅",
+      "is_staple": false
+    }
+  ]
+}
+
+Rules:
+- name: short descriptive (e.g. "Cherry tomatoes", "Avocados")
 - qty: integer count visible (default 1)
-- unit: short unit string ("pc", "bag", "container", "bunch", "pint", etc.)
-- emoji: a single emoji for the item
-- is_staple: true ONLY for non-perishable shelf items (oils, vinegars, spices, canned goods, condiments). false for fresh produce, meats, dairy.
+- unit: short unit ("pc", "bag", "container", "bunch", "pint", "can", "bottle", etc.)
+- emoji: single emoji for the item
+- is_staple: TRUE only for non-perishable shelf items (oils, vinegars, spices, canned goods, condiments, sauces). FALSE for fresh produce, meats, dairy, eggs.
 
-Example output:
-[
-  {"name":"Cherry tomatoes","qty":1,"unit":"pint","emoji":"🍅","is_staple":false},
-  {"name":"Avocados","qty":3,"unit":"pc","emoji":"🥑","is_staple":false}
-]
+Return ONLY the JSON object. No explanation.`
+        }
+      ]
+    }
+  ], { jsonMode: true, maxTokens: 1500 });
 
-Return ONLY the JSON array — no explanation.`
-      }
-    ]
-  }], 1500);
-
-  return extractJSON(text);
+  const parsed = extractJSON(text);
+  // Accept either {items: [...]} or a bare array, just to be safe
+  return Array.isArray(parsed) ? parsed : (parsed.items ?? []);
 }
 
 // ─── Action: create_meal ──────────────────────────────────────────────
 async function actionCreateMeal(payload: any) {
   const { pantry, profile, meals_history, people, ages, notes } = payload;
+
   const pantryList = (pantry || []).map((p: any) =>
     `- ${p.name} (${p.qty} ${p.unit || ''})${p.is_staple ? ' [staple]' : ''}${p.expires ? ' [expires '+p.expires+']' : ''}`
   ).join('\n');
+
   const historyList = Object.entries(meals_history || {})
-    .map(([wk, m]) => `${wk}: ${(m as string[]).join(', ')}`).join('\n') || '(none yet)';
+    .map(([wk, m]) => `${wk}: ${(m as string[]).join(', ')}`)
+    .join('\n') || '(none yet)';
 
-  const prompt = `You are Laura's personal meal planner. Generate ONE recipe right now using items from her pantry.
-
-LAURA'S PROFILE:
+  const userPrompt = `LAURA'S PROFILE:
 - Goal: ${profile.goal}
 - Loves: ${profile.loves.join(', ')}
 - Avoid: ${profile.avoid.join(', ')}
@@ -130,7 +151,7 @@ LAURA'S PROFILE:
 CURRENT PANTRY:
 ${pantryList}
 
-MEALS ALREADY EATEN — never repeat:
+MEALS ALREADY EATEN (never repeat):
 ${historyList}
 
 REQUEST:
@@ -139,27 +160,34 @@ REQUEST:
 - Notes: ${notes || 'none'}
 
 RULES:
-1. Tomatoes must be a prominent ingredient
-2. Use ONLY items currently in the pantry (or assume basic salt/pepper)
-3. Max ${profile.max_prep_minutes} minutes prep
-4. Restaurant-quality presentation
-5. Scale quantities to ${people} ${people === 1 ? 'person' : 'people'}
-6. Do NOT repeat any meal in the history
+1. Tomatoes must be a prominent ingredient.
+2. Use ONLY items currently in the pantry (basic salt/pepper assumed).
+3. Max ${profile.max_prep_minutes} minutes total.
+4. Restaurant-quality presentation — looks beautiful on the plate.
+5. Scale all quantities to ${people} ${people === 1 ? 'person' : 'people'}.
+6. Do NOT repeat any meal in the history.
 
-Return ONLY a valid JSON object — no prose, no markdown:
+Return JSON in this EXACT shape:
 {
   "name": "Meal name",
   "emoji": "🍽",
   "time": "10 min",
-  "cook": "No cook" | "Pan sear" | "Boil eggs ahead",
+  "cook": "No cook" | "Pan sear" | "Boil eggs ahead" | "Quick",
   "protein": "main protein",
-  "ingredients": ["item — qty", ...],
-  "steps": ["step 1", "step 2", ...],
+  "ingredients": ["item — qty", "..."],
+  "steps": ["step 1", "step 2"],
   "dressing": "dressing recipe",
   "plating": "plating tip"
 }`;
 
-  const text = await callClaude([{ role: 'user', content: prompt }], 2500);
+  const text = await callOpenAI([
+    {
+      role: 'system',
+      content: "You are Laura's personal chef. You create one bistro-quality meal at a time using only what's in her pantry. You ALWAYS respond with valid JSON only."
+    },
+    { role: 'user', content: userPrompt }
+  ], { jsonMode: true, maxTokens: 2500 });
+
   return extractJSON(text);
 }
 
@@ -173,8 +201,8 @@ Deno.serve(async (req) => {
     const { action, ...payload } = body;
     let result;
 
-    if (action === 'photo_to_pantry') result = await actionPhotoToPantry(payload);
-    else if (action === 'create_meal') result = await actionCreateMeal(payload);
+    if (action === 'photo_to_pantry')      result = await actionPhotoToPantry(payload);
+    else if (action === 'create_meal')     result = await actionCreateMeal(payload);
     else return json({ error: `Unknown action: ${action}` }, 400);
 
     return json({ result });

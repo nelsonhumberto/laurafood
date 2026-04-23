@@ -27,7 +27,7 @@ Run the SQL from [`supabase_setup.sql`](./supabase_setup.sql) in your [Supabase 
 ```bash
 supabase login
 supabase link --project-ref qdhqkcsfslkbhxtogjfp
-supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+supabase secrets set OPENAI_API_KEY=sk-...
 supabase functions deploy ai --no-verify-jwt
 ```
 
@@ -38,7 +38,7 @@ That's it — the deployed app at the live URL automatically uses the function.
 - **Frontend:** Single-file HTML + vanilla JS, Nunito + Fraunces fonts
 - **Database:** Supabase Postgres (JSONB single-row state model)
 - **Real-time:** Supabase Realtime channels
-- **AI:** Anthropic Claude (vision for photos, generation for recipes), proxied via Supabase Edge Function
+- **AI:** OpenAI GPT-4o (vision for photos, JSON-mode generation for recipes), proxied via Supabase Edge Function
 - **PWA:** Service worker (network-first), manifest, maskable icons
 - **Hosting:** GitHub Pages
 
