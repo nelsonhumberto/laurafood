@@ -1238,6 +1238,21 @@
       <div id="db-history"></div>
     </div>
 
+    <div class="card card-sunshine">
+      <div class="card-title">🔧 Troubleshoot sync</div>
+      <p style="font-size:13.5px;color:#5a3e00;font-weight:600;line-height:1.5;margin-bottom:12px;">
+        Sync stuck on "Syncing"? Try these in order:
+      </p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" onclick="forceResync()">↻ Force Resync</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearLocalCache()">🗑 Clear Local Cache</button>
+        <button class="btn btn-ghost btn-sm" onclick="hardReload()">🔁 Hard Reload</button>
+      </div>
+      <p style="font-size:12px;color:var(--ink-light);font-weight:600;margin-top:12px;line-height:1.5;">
+        <strong>Force Resync</strong> = pull latest from cloud · <strong>Clear Local Cache</strong> = wipe device data and re-download from cloud · <strong>Hard Reload</strong> = bypass all browser caches
+      </p>
+    </div>
+
     <div class="card" id="install-card" style="display:none;">
       <div class="card-title">📲 Install as App</div>
       <p style="font-size:13.5px;color:var(--ink-mid);font-weight:600;line-height:1.5;margin-bottom:12px;">
@@ -1426,7 +1441,7 @@
 // ── SUPABASE CLIENT ────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v4.4';
+const APP_VERSION = 'v4.5';
 const SUPABASE_URL = 'https://qdhqkcsfslkbhxtogjfp.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_bmapexcRWmRzsRvbqIJCpw_XnWaMCZL';
 const CONNECT_TIMEOUT_MS = 8000;
@@ -1609,14 +1624,90 @@ function setSyncStatus(status, label) {
   span.textContent = label;
 }
 
+// Normalize any DB shape to the current schema. Defends against stale
+// localStorage / Supabase rows from older app versions that may be missing
+// fields the current renderers depend on. Without this, init can throw and
+// leave the sync pill stuck on 'Syncing'.
+function normalizeDB(data) {
+  const fresh = JSON.parse(JSON.stringify(DEFAULT_DB));
+  if (!data || typeof data !== 'object') return fresh;
+
+  const out = { ...fresh, ...data };
+  out.user_profile = { ...fresh.user_profile, ...(data.user_profile || {}) };
+  out.state        = { ...fresh.state,        ...(data.state || {}) };
+
+  // Required arrays
+  if (!Array.isArray(out.state.pantry))  out.state.pantry  = fresh.state.pantry;
+  if (!Array.isArray(out.state.to_buy))  out.state.to_buy  = [];
+  if (!Array.isArray(out.state.meals))   out.state.meals   = fresh.state.meals;
+
+  // Required object
+  if (!out.state.meals_history || typeof out.state.meals_history !== 'object') {
+    out.state.meals_history = fresh.state.meals_history;
+  }
+
+  // Per-pantry-item field defaults (frozen, is_staple, qty, etc. added in later versions)
+  out.state.pantry = out.state.pantry.map(p => ({
+    id: p.id || uid('p'),
+    name: p.name || 'Item',
+    qty: typeof p.qty === 'number' ? p.qty : 1,
+    unit: p.unit || '',
+    emoji: p.emoji || '📦',
+    is_staple: !!p.is_staple,
+    frozen: !!p.frozen,
+    expires: p.expires || null,
+    added_at: p.added_at || Date.now(),
+    ...p
+  })).map(p => ({ ...p, frozen: !!p.frozen, is_staple: !!p.is_staple }));
+
+  // Per-meal field defaults
+  out.state.meals = out.state.meals.map((m, i) => ({
+    id: m.id || ('m_' + (i + 1)),
+    week: m.week || 1,
+    day: m.day || (i + 1),
+    name: m.name || 'Meal',
+    emoji: m.emoji || '🍽',
+    time: m.time || '10 min',
+    cook: m.cook || 'Quick',
+    protein: m.protein || '',
+    ingredients: Array.isArray(m.ingredients) ? m.ingredients : [],
+    steps: Array.isArray(m.steps) ? m.steps : [],
+    dressing: m.dressing || '',
+    plating: m.plating || '',
+    prepared: !!m.prepared,
+    prepared_at: m.prepared_at || null,
+    ...m
+  }));
+
+  // Per-buy-item field defaults
+  out.state.to_buy = out.state.to_buy.map(b => ({
+    id: b.id || uid('b'),
+    name: b.name || 'Item',
+    qty: typeof b.qty === 'number' ? b.qty : 1,
+    unit: b.unit || '',
+    checked: !!b.checked,
+    added_at: b.added_at || Date.now(),
+    ...b
+  }));
+
+  return out;
+}
+
 function loadFromLocal() {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    return raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(DEFAULT_DB));
-  } catch { return JSON.parse(JSON.stringify(DEFAULT_DB)); }
+    if (!raw) return JSON.parse(JSON.stringify(DEFAULT_DB));
+    return normalizeDB(JSON.parse(raw));
+  } catch (e) {
+    console.warn('localStorage corrupt, resetting:', e);
+    return JSON.parse(JSON.stringify(DEFAULT_DB));
+  }
 }
 
-function saveToLocal(data) { localStorage.setItem(LS_KEY, JSON.stringify(data)); }
+function saveToLocal(data) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); }
+  catch (e) { console.warn('localStorage save failed:', e); }
+}
 
 async function loadFromSupabase() {
   if (!sbClient) throw new Error('SDK not loaded');
@@ -1627,7 +1718,7 @@ async function loadFromSupabase() {
       if (!data?.data || Object.keys(data.data).length === 0) {
         throw Object.assign(new Error('empty_row'), { code: 'EMPTY' });
       }
-      return data.data;
+      return normalizeDB(data.data);
     });
 
   const timeoutPromise = new Promise((_, reject) =>
@@ -2226,6 +2317,61 @@ async function resetDB() {
   showToast('Reset complete');
 }
 
+// ─── Sync recovery utilities ──────────────────────────────────────────
+async function forceResync() {
+  showToast('↻ Pulling from cloud…');
+  setSyncStatus('syncing', 'Resyncing');
+  try {
+    const remote = await loadFromSupabase();
+    db = remote;
+    saveToLocal(db);
+    renderAll();
+    setSyncStatus('synced', 'Synced');
+    showToast('✓ Resynced from cloud');
+  } catch (e) {
+    console.error(e);
+    if (e.code === 'EMPTY') {
+      try {
+        await saveToSupabase(db);
+        setSyncStatus('synced', 'Synced');
+        showToast('✓ Pushed local data to cloud');
+      } catch (e2) {
+        setSyncStatus('error', 'Save failed');
+        showToast('Save failed: ' + e2.message);
+      }
+    } else {
+      setSyncStatus('offline', 'Offline');
+      showToast('Resync failed: ' + e.message);
+    }
+  }
+}
+
+async function clearLocalCache() {
+  if (!confirm('This will wipe ALL data on this device and re-download from the cloud. Continue?')) return;
+  try {
+    localStorage.removeItem(LS_KEY);
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+    showToast('🗑 Cleared. Reloading…');
+    setTimeout(() => location.reload(), 800);
+  } catch (e) {
+    showToast('Clear failed: ' + e.message);
+  }
+}
+
+function hardReload() {
+  // Cache-bust query param forces a full network fetch
+  const url = new URL(location.href);
+  url.searchParams.set('_t', Date.now());
+  location.replace(url.toString());
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // ── AI: PHOTO → PANTRY ─────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════
@@ -2546,11 +2692,18 @@ Return JSON in this EXACT shape:
 // ═══════════════════════════════════════════════════════════════════════
 
 function renderAll() {
-  renderHome();
-  renderMenu();
-  renderPantry();
-  renderBuy();
-  renderDB();
+  // Each section is wrapped so one bad section can't kill the rest of the UI
+  // and silently leave the sync pill stuck on 'Syncing'.
+  for (const [name, fn] of [
+    ['home',   renderHome],
+    ['menu',   renderMenu],
+    ['pantry', renderPantry],
+    ['buy',    renderBuy],
+    ['db',     renderDB]
+  ]) {
+    try { fn(); }
+    catch (e) { console.error(`render ${name} failed:`, e); }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -2663,8 +2816,14 @@ function maybeShowIOSInstall() {
 // ═══════════════════════════════════════════════════════════════════════
 
 (async () => {
-  document.getElementById('ver-tag').textContent = APP_VERSION;
-  renderAll();
+  try {
+    document.getElementById('ver-tag').textContent = APP_VERSION;
+    db = normalizeDB(db);  // belt & suspenders: re-normalize whatever loadFromLocal gave us
+    renderAll();
+  } catch (e) {
+    console.error('First render failed:', e);
+    setSyncStatus('error', 'Render error');
+  }
 
   try {
     const remote = await loadDB();
@@ -2678,8 +2837,9 @@ function maybeShowIOSInstall() {
     setSyncStatus('error', 'Init failed');
     showToast('Sync error — using local data');
   }
+
   setTimeout(maybeShowIOSInstall, 2000);
-  refreshInstallCard();
+  try { refreshInstallCard(); } catch (e) { console.warn(e); }
 })();
 </script>
 </body>
