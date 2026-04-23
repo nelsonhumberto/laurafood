@@ -1,36 +1,61 @@
 # 🍅 Laura's Food
 
-A beautiful, AI-powered weekly meal planning app for healthy, restaurant-quality meals in 10 minutes or less.
+A beautiful, AI-powered weekly meal planning app. Restaurant-quality, healthy meals in 10 minutes or less — with cross-device sync, photo-to-pantry recognition, and AI recipe generation from whatever's in your kitchen.
+
+**Live App:** [https://nelsonhumberto.github.io/laurafood/](https://nelsonhumberto.github.io/laurafood/)
 
 ## Features
 
-- **Week 1 Menu** — 7 complete recipes (Mon–Sun), each with tomatoes as the star ingredient
-- **Recipe Cards** — Full ingredients, step-by-step instructions, dressing recipes & plating tips
-- **Pantry Tracker** — Toggle items as empty to automatically add them to next week's shopping list
-- **Smart Shopping List** — Fresh items only; pantry staples are never included unless marked empty
-- **Next Week Generator** — Pre-built AI system prompt & trigger phrase to generate Week 2+ via Claude or any AI
-- **Persistent State** — Shopping checkmarks and pantry status saved locally via localStorage
+- 📅 **Day-numbered weekly menu** with full recipes, ingredients, steps, dressings, plating tips
+- 🥫 **Smart pantry** with quantity, units, expiration dates, and staple flags
+- 📷 **Photo → pantry** — snap a picture, AI identifies items and adds them
+- ✨ **Create Meal** — AI generates a recipe from your current pantry, scaled for # of people and ages
+- 🍳 **"I cooked this"** flow — auto-deducts used ingredients, auto-adds empties to To Buy
+- 🛒 **To-Buy list** — manual + auto-populated from empty pantry items
+- ☁️ **Cross-device sync** via Supabase (real-time updates between devices)
+- 📲 **Installable PWA** — Add to Home Screen on iOS / Android / desktop
+- 💾 **Offline-first** — works without internet, syncs when back online
 
-## Rules
+## Setup
 
-- Tomatoes as the star ingredient in every meal
-- 10 minutes or less prep time per meal
-- Restaurant-quality, beautifully arranged presentation
-- Fresh or frozen protein (shrimp & salmon primary; tuna pouch as backup)
-- Pantry staples are **never** on the shopping list
+### 1. Database (one-time)
+
+Run the SQL from [`supabase_setup.sql`](./supabase_setup.sql) in your [Supabase SQL Editor](https://supabase.com/dashboard/project/qdhqkcsfslkbhxtogjfp/editor).
+
+### 2. AI Edge Function (one-time)
+
+```bash
+supabase login
+supabase link --project-ref qdhqkcsfslkbhxtogjfp
+supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+supabase functions deploy ai --no-verify-jwt
+```
+
+That's it — the deployed app at the live URL automatically uses the function.
 
 ## Tech Stack
 
-Single-file HTML app — no build step, no dependencies, no backend required. Open `index.html` in any browser.
+- **Frontend:** Single-file HTML + vanilla JS, Nunito + Fraunces fonts
+- **Database:** Supabase Postgres (JSONB single-row state model)
+- **Real-time:** Supabase Realtime channels
+- **AI:** Anthropic Claude (vision for photos, generation for recipes), proxied via Supabase Edge Function
+- **PWA:** Service worker (network-first), manifest, maskable icons
+- **Hosting:** GitHub Pages
 
-## Live App
+## Project Structure
 
-Deployed via GitHub Pages: [View App](https://nelsonhumberto.github.io/laurafood/)
-
-## Generating New Weeks
-
-Open the **Next Week** tab, copy the system prompt, and send it to [Claude.ai](https://claude.ai). Then use the trigger phrase:
-
-> **"Laura's Food — give me Week 2"**
-
-The AI will generate 7 brand-new meals, a shopping list, and plating tips — with no repeats from previous weeks.
+```
+.
+├── index.html              # The whole app
+├── manifest.json           # PWA manifest
+├── sw.js                   # Service worker (offline + caching)
+├── icon.svg                # Vector icon
+├── icon-192.png            # PWA icon (small)
+├── icon-512.png            # PWA icon (large)
+├── supabase_setup.sql      # One-time DB setup
+├── supabase/
+│   ├── config.toml
+│   └── functions/ai/
+│       └── index.ts        # Claude proxy edge function
+└── README.md
+```
