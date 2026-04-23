@@ -591,6 +591,8 @@
     .item-row.expiring { border-left: 4px solid var(--sunshine); padding-left: 12px; }
     .item-row.expired  { border-left: 4px solid var(--coral); padding-left: 12px; background: var(--coral-soft); }
     .item-row.staple   { background: var(--mint-soft); }
+    .item-row.frozen   { background: var(--ocean-soft); border-left: 4px solid var(--ocean); padding-left: 12px; }
+    .item-row.frozen .item-emoji { background: white; box-shadow: 0 0 0 2px var(--ocean) inset; }
 
     .item-emoji {
       width: 42px; height: 42px;
@@ -1186,6 +1188,7 @@
     <div class="filter-chips">
       <button class="chip active" onclick="setPantryFilter('all', this)">All</button>
       <button class="chip" onclick="setPantryFilter('fresh', this)">🥬 Fresh</button>
+      <button class="chip" onclick="setPantryFilter('frozen', this)">❄️ Frozen</button>
       <button class="chip" onclick="setPantryFilter('staple', this)">🥫 Staples</button>
       <button class="chip" onclick="setPantryFilter('expiring', this)">⏰ Expiring</button>
     </div>
@@ -1293,7 +1296,15 @@
 
     <div class="switch-row">
       <div class="switch-label">
-        <div class="lbl-name">Pantry staple</div>
+        <div class="lbl-name">❄️ Frozen</div>
+        <div class="lbl-help">Lasts way longer (auto-sets a 6-month expiration)</div>
+      </div>
+      <button class="toggle off" id="ap-frozen" onclick="toggleFrozenSwitch(this)"></button>
+    </div>
+
+    <div class="switch-row">
+      <div class="switch-label">
+        <div class="lbl-name">🥫 Pantry staple</div>
         <div class="lbl-help">Won't be auto-deducted (salt, oil, etc.)</div>
       </div>
       <button class="toggle off" id="ap-staple" onclick="this.classList.toggle('on');this.classList.toggle('off')"></button>
@@ -1404,7 +1415,7 @@
 // ── SUPABASE CLIENT ────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v4.2';
+const APP_VERSION = 'v4.3';
 const SUPABASE_URL = 'https://qdhqkcsfslkbhxtogjfp.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_bmapexcRWmRzsRvbqIJCpw_XnWaMCZL';
 const CONNECT_TIMEOUT_MS = 8000;
@@ -1439,37 +1450,48 @@ function defaultPantry() {
   ];
   staples.forEach(([n, e], i) => items.push({
     id: 'st_' + i, name: n, qty: 1, unit: 'jar', emoji: e,
-    is_staple: true, expires: null, added_at: stamp
+    is_staple: true, frozen: false, expires: null, added_at: stamp
   }));
-  // Fresh items
+  // Fresh + frozen items. fields: [name, emoji, qty, unit, days_until_expiry, frozen]
   const fresh = [
-    ["Arugula", "🥬", 1, "bag", 5],
-    ["Mixed greens", "🥬", 1, "bag", 5],
-    ["Baby spinach", "🥬", 1, "bag", 5],
-    ["Romaine lettuce", "🥬", 1, "head", 7],
-    ["Fresh basil", "🌿", 1, "bunch", 5],
-    ["Cilantro", "🌿", 1, "bunch", 5],
-    ["Cherry tomatoes", "🍅", 2, "pint", 7],
-    ["Roma tomatoes", "🍅", 4, "pc", 7],
-    ["Frozen shrimp", "🦐", 1, "bag", 60],
-    ["Fresh salmon", "🐟", 2, "fillet", 3],
-    ["Tuna pouches", "🐟", 3, "pouch", 365],
-    ["Avocados", "🥑", 3, "pc", 5],
-    ["Cucumber", "🥒", 1, "pc", 7],
-    ["Red onion", "🧅", 1, "pc", 21],
-    ["Lemons", "🍋", 3, "pc", 14],
-    ["Lime", "🍋", 1, "pc", 14],
-    ["Fresh mozzarella pearls", "🧀", 1, "tub", 14],
-    ["Feta crumbles", "🧀", 1, "container", 21],
-    ["Greek yogurt", "🥛", 1, "tub", 14],
-    ["Eggs", "🥚", 6, "pc", 21]
+    ["Arugula", "🥬", 1, "bag", 5, false],
+    ["Mixed greens", "🥬", 1, "bag", 5, false],
+    ["Baby spinach", "🥬", 1, "bag", 5, false],
+    ["Romaine lettuce", "🥬", 1, "head", 7, false],
+    ["Fresh basil", "🌿", 1, "bunch", 5, false],
+    ["Cilantro", "🌿", 1, "bunch", 5, false],
+    ["Cherry tomatoes", "🍅", 2, "pint", 7, false],
+    ["Roma tomatoes", "🍅", 4, "pc", 7, false],
+    // ── Frozen proteins (last months in the freezer) ──
+    ["Frozen shrimp", "🦐", 1, "bag", 180, true],
+    ["Frozen salmon fillets", "🐟", 4, "fillet", 180, true],
+    ["Frozen chicken breasts", "🍗", 4, "pc", 180, true],
+    ["Frozen ground turkey", "🥩", 1, "lb", 120, true],
+    // ── Frozen veg / fruit ──
+    ["Frozen broccoli", "🥦", 1, "bag", 240, true],
+    ["Frozen spinach", "🥬", 1, "bag", 240, true],
+    ["Frozen corn", "🌽", 1, "bag", 240, true],
+    ["Frozen berries", "🫐", 1, "bag", 180, true],
+    // ── Fresh ──
+    ["Fresh salmon", "🐟", 2, "fillet", 3, false],
+    ["Tuna pouches", "🐟", 3, "pouch", 365, false],
+    ["Avocados", "🥑", 3, "pc", 5, false],
+    ["Cucumber", "🥒", 1, "pc", 7, false],
+    ["Red onion", "🧅", 1, "pc", 21, false],
+    ["Lemons", "🍋", 3, "pc", 14, false],
+    ["Lime", "🍋", 1, "pc", 14, false],
+    ["Fresh mozzarella pearls", "🧀", 1, "tub", 14, false],
+    ["Feta crumbles", "🧀", 1, "container", 21, false],
+    ["Greek yogurt", "🥛", 1, "tub", 14, false],
+    ["Eggs", "🥚", 6, "pc", 21, false]
   ];
-  fresh.forEach(([n, e, q, u, days], i) => {
+  fresh.forEach(([n, e, q, u, days, frozen], i) => {
     const d = new Date();
     d.setDate(d.getDate() + days);
     items.push({
       id: 'fr_' + i, name: n, qty: q, unit: u, emoji: e,
-      is_staple: false, expires: d.toISOString().slice(0,10), added_at: stamp
+      is_staple: false, frozen: !!frozen,
+      expires: d.toISOString().slice(0,10), added_at: stamp
     });
   });
   return items;
@@ -1925,12 +1947,13 @@ function setPantryFilter(f, btn) {
 function renderPantry() {
   const items = db.state.pantry.filter(p => {
     const days = daysUntil(p.expires);
-    if (pantryFilter === 'fresh') return !p.is_staple;
-    if (pantryFilter === 'staple') return p.is_staple;
-    if (pantryFilter === 'expiring') return days !== null && days <= 5;
+    if (pantryFilter === 'fresh')    return !p.is_staple && !p.frozen;
+    if (pantryFilter === 'frozen')   return !!p.frozen;
+    if (pantryFilter === 'staple')   return p.is_staple;
+    if (pantryFilter === 'expiring') return days !== null && days <= 5 && !p.is_staple;
     return true;
   }).sort((a, b) => {
-    // Expiring first, then fresh, then staples
+    // Expiring first, then fresh, then frozen, then staples
     const ad = daysUntil(a.expires) ?? 9999;
     const bd = daysUntil(b.expires) ?? 9999;
     return ad - bd;
@@ -1953,17 +1976,25 @@ function renderPantry() {
     let cls = '';
     let expBadge = '';
     if (p.is_staple) cls = 'staple';
+    else if (p.frozen) {
+      cls = 'frozen';
+      if (days !== null && days >= 0) expBadge = `<span style="color:var(--ocean);font-weight:700;">Use within ${days >= 60 ? Math.round(days/30) + 'mo' : days + 'd'}</span>`;
+    }
     else if (days !== null) {
       if (days < 0)      { cls = 'expired';  expBadge = `<span class="exp-bad">Expired ${Math.abs(days)}d ago</span>`; }
       else if (days === 0) { cls = 'expired'; expBadge = `<span class="exp-bad">Expires today</span>`; }
       else if (days <= 3){ cls = 'expiring'; expBadge = `<span class="exp-warn">Expires in ${days}d</span>`; }
       else if (days <= 7){ expBadge = `<span>Expires in ${days}d</span>`; }
     }
+    const tagBadges = [
+      p.is_staple ? '<span class="tag green">staple</span>' : '',
+      p.frozen ? '<span class="tag blue">❄️ frozen</span>' : ''
+    ].filter(Boolean).join(' ');
     return `
       <div class="item-row ${cls}">
         <div class="item-emoji">${p.emoji || '📦'}</div>
         <div class="item-info">
-          <div class="name">${p.name}${p.is_staple ? ' <span class="tag green">staple</span>' : ''}</div>
+          <div class="name">${p.name}${tagBadges ? ' ' + tagBadges : ''}</div>
           <div class="meta">
             <span>${p.qty} ${p.unit || ''}</span>
             ${expBadge}
@@ -2008,10 +2039,25 @@ function openAddPantryModal() {
   document.getElementById('ap-unit').value = '';
   document.getElementById('ap-exp').value = '';
   document.getElementById('ap-emoji').value = '';
-  document.getElementById('ap-staple').classList.remove('on');
-  document.getElementById('ap-staple').classList.add('off');
+  ['ap-staple', 'ap-frozen'].forEach(id => {
+    const t = document.getElementById(id);
+    t.classList.remove('on'); t.classList.add('off');
+  });
   openModal('modal-add-pantry');
   setTimeout(() => document.getElementById('ap-name').focus(), 200);
+}
+
+function toggleFrozenSwitch(el) {
+  el.classList.toggle('on');
+  el.classList.toggle('off');
+  // When turning on Frozen, suggest a 6-month expiration if none set
+  if (el.classList.contains('on')) {
+    const expInput = document.getElementById('ap-exp');
+    if (!expInput.value) {
+      const d = new Date(); d.setMonth(d.getMonth() + 6);
+      expInput.value = d.toISOString().slice(0, 10);
+    }
+  }
 }
 
 async function addPantryItem() {
@@ -2024,6 +2070,7 @@ async function addPantryItem() {
     unit: document.getElementById('ap-unit').value.trim(),
     emoji: document.getElementById('ap-emoji').value.trim() || '📦',
     is_staple: document.getElementById('ap-staple').classList.contains('on'),
+    frozen:    document.getElementById('ap-frozen').classList.contains('on'),
     expires: document.getElementById('ap-exp').value || null,
     added_at: Date.now()
   };
@@ -2221,13 +2268,14 @@ function renderPhotoOutput() {
   out.innerHTML = `
     <div class="item-list" style="margin:10px 0 4px;">
       ${photoDraft.map((it, i) => `
-        <div class="item-row">
+        <div class="item-row ${it.frozen ? 'frozen' : ''}">
           <div class="item-emoji">${it.emoji || '📦'}</div>
           <div class="item-info">
             <input class="text-input" style="padding:6px 10px;font-size:13px;" value="${it.name}" oninput="photoDraft[${i}].name=this.value" />
-            <div class="meta" style="margin-top:6px;display:flex;gap:6px;align-items:center;">
+            <div class="meta" style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
               <input type="number" class="text-input" style="padding:4px 8px;font-size:12px;width:60px;" value="${it.qty}" oninput="photoDraft[${i}].qty=parseInt(this.value)||1" />
               <input type="text" class="text-input" style="padding:4px 8px;font-size:12px;width:80px;" placeholder="unit" value="${it.unit||''}" oninput="photoDraft[${i}].unit=this.value" />
+              <button class="chip ${it.frozen ? 'active' : ''}" style="padding:3px 10px;font-size:11px;" onclick="photoDraft[${i}].frozen=!photoDraft[${i}].frozen;renderPhotoOutput()">❄️ Frozen</button>
               <button class="delete-btn" onclick="photoDraft.splice(${i},1);renderPhotoOutput()">×</button>
             </div>
           </div>
@@ -2240,10 +2288,16 @@ async function confirmPhotoAdd() {
   if (!photoDraft || photoDraft.length === 0) { closeModal('modal-photo'); return; }
   const stamp = Date.now();
   photoDraft.forEach(it => {
+    let expires = it.expires || null;
+    // Frozen items get a 6-month default expiration if AI didn't set one
+    if (!expires && it.frozen) {
+      const d = new Date(); d.setMonth(d.getMonth() + 6);
+      expires = d.toISOString().slice(0, 10);
+    }
     db.state.pantry.push({
       id: uid('p'), name: it.name, qty: it.qty || 1, unit: it.unit || '',
-      emoji: it.emoji || '📦', is_staple: !!it.is_staple,
-      expires: it.expires || null, added_at: stamp
+      emoji: it.emoji || '📦', is_staple: !!it.is_staple, frozen: !!it.frozen,
+      expires, added_at: stamp
     });
   });
   closeModal('modal-photo');
@@ -2405,14 +2459,15 @@ async function openaiPhotoToPantry(dataUrl) {
             type: 'text',
             text: `Identify each distinct food/grocery item in this photo. Return JSON in this exact shape:
 
-{"items":[{"name":"Cherry tomatoes","qty":1,"unit":"pint","emoji":"🍅","is_staple":false}]}
+{"items":[{"name":"Cherry tomatoes","qty":1,"unit":"pint","emoji":"🍅","is_staple":false,"frozen":false}]}
 
 Rules:
-- name: short descriptive (e.g. "Cherry tomatoes", "Avocados")
+- name: short descriptive (e.g. "Cherry tomatoes", "Avocados", "Frozen shrimp")
 - qty: integer count visible (default 1)
-- unit: short string ("pc","bag","container","bunch","pint","can","bottle")
+- unit: short string ("pc","bag","container","bunch","pint","can","bottle","fillet","lb")
 - emoji: a single emoji
-- is_staple: TRUE only for non-perishable shelf items (oils, vinegars, spices, canned goods, condiments). FALSE for fresh produce, meats, dairy, eggs.
+- is_staple: TRUE only for non-perishable shelf items (oils, vinegars, spices, canned goods, condiments, sauces). FALSE for produce, meats, dairy, eggs.
+- frozen: TRUE if the item is clearly frozen (visible frost, plastic freezer bag, frozen-food packaging, ice crystals). Prepend "Frozen " to the name when frozen=true. FALSE otherwise.
 
 Return ONLY the JSON object.`
           }
