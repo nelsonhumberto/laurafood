@@ -22,23 +22,27 @@ A beautiful, AI-powered weekly meal planning app. Restaurant-quality, healthy me
 
 Run the SQL from [`supabase_setup.sql`](./supabase_setup.sql) in your [Supabase SQL Editor](https://supabase.com/dashboard/project/qdhqkcsfslkbhxtogjfp/editor).
 
-### 2. AI Edge Function (one-time)
+### 2. AI proxy (one-time, in SQL editor)
 
-```bash
-supabase login
-supabase link --project-ref qdhqkcsfslkbhxtogjfp
-supabase secrets set OPENAI_API_KEY=sk-...
-supabase functions deploy ai --no-verify-jwt
+Run [`supabase_ai_setup.sql`](./supabase_ai_setup.sql) in the SQL editor.
+Then insert your OpenAI key into the private secrets table:
+
+```sql
+INSERT INTO app_private.secrets (key, value)
+VALUES ('openai_api_key', 'sk-...')
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 ```
 
-That's it — the deployed app at the live URL automatically uses the function.
+The browser calls a SECURITY DEFINER Postgres function `public.ai_call(payload jsonb)`
+which proxies to OpenAI with the secret key — the key is never visible to the client.
+Add billing to your OpenAI account at [platform.openai.com/settings/organization/billing](https://platform.openai.com/settings/organization/billing/overview).
 
 ## Tech Stack
 
 - **Frontend:** Single-file HTML + vanilla JS, Nunito + Fraunces fonts
 - **Database:** Supabase Postgres (JSONB single-row state model)
 - **Real-time:** Supabase Realtime channels
-- **AI:** OpenAI GPT-4o (vision for photos, JSON-mode generation for recipes), proxied via Supabase Edge Function
+- **AI:** OpenAI GPT-4o (vision for photos, JSON-mode generation for recipes), proxied via a SECURITY DEFINER Postgres function (key stored in `app_private.secrets`, never sent to the browser)
 - **PWA:** Service worker (network-first), manifest, maskable icons
 - **Hosting:** GitHub Pages
 
@@ -52,10 +56,7 @@ That's it — the deployed app at the live URL automatically uses the function.
 ├── icon.svg                # Vector icon
 ├── icon-192.png            # PWA icon (small)
 ├── icon-512.png            # PWA icon (large)
-├── supabase_setup.sql      # One-time DB setup
-├── supabase/
-│   ├── config.toml
-│   └── functions/ai/
-│       └── index.ts        # Claude proxy edge function
+├── supabase_setup.sql      # One-time app_state table + RLS
+├── supabase_ai_setup.sql   # One-time AI proxy (http extension + ai_call function)
 └── README.md
 ```

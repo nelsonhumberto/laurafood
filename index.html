@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
   <meta name="theme-color" content="#ff6b6b" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Laura's Food" />
@@ -97,6 +100,7 @@
 
     .brand-text h1 { font-size: 22px; line-height: 1; }
     .brand-text p { font-size: 11.5px; color: var(--ink-light); margin-top: 3px; font-weight: 600; }
+    .brand-text .ver { font-size: 9px; color: var(--ink-light); opacity: 0.55; margin-left: 4px; font-weight: 700; }
 
     .sync-pill {
       display: flex;
@@ -1074,7 +1078,7 @@
     <div class="brand">
       <div class="brand-emoji">🍅</div>
       <div class="brand-text">
-        <h1>Laura's Food</h1>
+        <h1>Laura's Food <span class="ver" id="ver-tag"></span></h1>
         <p id="brand-sub">Eat well · live bright</p>
       </div>
     </div>
@@ -1400,10 +1404,13 @@
 // ── SUPABASE CLIENT ────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════
 
+const APP_VERSION = 'v4.2';
 const SUPABASE_URL = 'https://qdhqkcsfslkbhxtogjfp.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_bmapexcRWmRzsRvbqIJCpw_XnWaMCZL';
 const CONNECT_TIMEOUT_MS = 8000;
+const SAVE_TIMEOUT_MS    = 8000;
 const AI_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/ai`;
+console.log('Laura\'s Food', APP_VERSION);
 
 let sbClient = null;
 try {
@@ -1599,9 +1606,13 @@ async function loadFromSupabase() {
 
 async function saveToSupabase(dbObj) {
   if (!sbClient) throw new Error('SDK not loaded');
-  const { error } = await sbClient.from('app_state')
-    .upsert({ id: DB_ROW_ID, data: dbObj, updated_at: new Date().toISOString() }, { onConflict: 'id' });
-  if (error) throw error;
+  const savePromise = sbClient.from('app_state')
+    .upsert({ id: DB_ROW_ID, data: dbObj, updated_at: new Date().toISOString() }, { onConflict: 'id' })
+    .then(({ error }) => { if (error) throw error; });
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('save_timeout')), SAVE_TIMEOUT_MS)
+  );
+  return Promise.race([savePromise, timeoutPromise]);
 }
 
 async function loadDB() {
@@ -2166,23 +2177,39 @@ async function handlePhoto(event) {
   if (!file) return;
   showToast('🔍 Analyzing photo…');
 
-  // Convert to base64
-  const reader = new FileReader();
-  reader.onload = async () => {
-    const b64 = reader.result.split(',')[1];
-    try {
-      const items = await aiCall('photo_to_pantry', { image_base64: b64, image_type: file.type });
-      photoDraft = items;
-      renderPhotoOutput();
-      openModal('modal-photo');
-    } catch (e) {
-      console.error(e);
-      if (e.code === 'NO_AI') openModal('modal-key');
-      else showToast('AI error: ' + e.message);
-    }
-  };
-  reader.readAsDataURL(file);
+  try {
+    // Resize image to ~800px max so the upload is reasonable
+    const dataUrl = await resizeImage(file, 1024);
+    const items = await openaiPhotoToPantry(dataUrl);
+    photoDraft = items;
+    renderPhotoOutput();
+    openModal('modal-photo');
+  } catch (e) {
+    console.error(e);
+    if (e.code === 'NO_AI') openModal('modal-key');
+    else showToast('AI error: ' + (e.message || 'unknown'));
+  }
   event.target.value = '';
+}
+
+function resizeImage(file, maxDim) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = reject;
+    const reader = new FileReader();
+    reader.onload = () => { img.src = reader.result; };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 function renderPhotoOutput() {
@@ -2248,7 +2275,7 @@ async function generateMeal() {
   document.getElementById('cook-go').disabled = true;
 
   try {
-    const recipe = await aiCall('create_meal', {
+    const recipe = await openaiCreateMeal({
       pantry: db.state.pantry,
       profile: db.user_profile,
       meals_history: db.state.meals_history,
@@ -2317,34 +2344,135 @@ async function addGeneratedMeal(recipe) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// ── AI CALL (proxied via Supabase Edge Function) ───────────────────────
+// ── OPENAI (proxied via Supabase Postgres RPC `ai_call`) ──────────────
 // ═══════════════════════════════════════════════════════════════════════
+// The browser builds a full OpenAI Chat Completions request body and
+// calls public.ai_call(payload jsonb), which adds the API key (stored
+// in app_private.secrets, never visible to the client) and forwards
+// to https://api.openai.com/v1/chat/completions.
 
-async function aiCall(action, payload) {
-  const res = await fetch(AI_FUNCTION_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`
-    },
-    body: JSON.stringify({ action, ...payload })
-  });
-
-  if (res.status === 404) {
-    const err = new Error('AI function not deployed');
+async function callOpenAI(openaiPayload) {
+  if (!sbClient) {
+    const err = new Error('Supabase client not loaded');
     err.code = 'NO_AI';
     throw err;
   }
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `HTTP ${res.status}`);
+  const { data, error } = await sbClient.rpc('ai_call', { payload: openaiPayload });
+  if (error) {
+    if (error.code === 'PGRST202' || error.message?.includes('ai_call')) {
+      const e = new Error('AI proxy not deployed');
+      e.code = 'NO_AI';
+      throw e;
+    }
+    throw new Error(error.message);
   }
+  if (data?.error) {
+    // Surface OpenAI-side errors with detail
+    const detail = data.detail?.error?.message || JSON.stringify(data.detail || {});
+    throw new Error(`${data.error} — ${detail}`);
+  }
+  // Standard OpenAI response shape: data.choices[0].message.content
+  const content = data?.choices?.[0]?.message?.content;
+  if (!content) throw new Error('Empty OpenAI response');
+  return content;
+}
 
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return data.result;
+function extractJSON(text) {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const candidate = fenced ? fenced[1] : text;
+  try { return JSON.parse(candidate.trim()); } catch {}
+  const sO = candidate.indexOf('{'), sA = candidate.indexOf('[');
+  const head = (sA !== -1 && (sO === -1 || sA < sO)) ? sA : sO;
+  if (head === -1) throw new Error('No JSON in response');
+  const closer = candidate[head] === '[' ? ']' : '}';
+  return JSON.parse(candidate.slice(head, candidate.lastIndexOf(closer) + 1));
+}
+
+// ─── Photo → pantry items (vision) ────────────────────────────────────
+async function openaiPhotoToPantry(dataUrl) {
+  const text = await callOpenAI({
+    model: 'gpt-4o',
+    max_tokens: 1500,
+    temperature: 0.3,
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: 'You are a vision assistant that catalogs food and grocery items in photos. You ALWAYS respond with valid JSON only — no prose, no markdown.' },
+      {
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } },
+          {
+            type: 'text',
+            text: `Identify each distinct food/grocery item in this photo. Return JSON in this exact shape:
+
+{"items":[{"name":"Cherry tomatoes","qty":1,"unit":"pint","emoji":"🍅","is_staple":false}]}
+
+Rules:
+- name: short descriptive (e.g. "Cherry tomatoes", "Avocados")
+- qty: integer count visible (default 1)
+- unit: short string ("pc","bag","container","bunch","pint","can","bottle")
+- emoji: a single emoji
+- is_staple: TRUE only for non-perishable shelf items (oils, vinegars, spices, canned goods, condiments). FALSE for fresh produce, meats, dairy, eggs.
+
+Return ONLY the JSON object.`
+          }
+        ]
+      }
+    ]
+  });
+  const parsed = extractJSON(text);
+  return Array.isArray(parsed) ? parsed : (parsed.items || []);
+}
+
+// ─── Generate a meal from pantry ──────────────────────────────────────
+async function openaiCreateMeal({ pantry, profile, meals_history, people, ages, notes }) {
+  const pantryList = pantry.map(p =>
+    `- ${p.name} (${p.qty} ${p.unit || ''})${p.is_staple ? ' [staple]' : ''}${p.expires ? ' [expires '+p.expires+']' : ''}`
+  ).join('\n');
+  const historyList = Object.entries(meals_history || {})
+    .map(([wk, m]) => `${wk}: ${m.join(', ')}`).join('\n') || '(none yet)';
+
+  const userPrompt = `LAURA'S PROFILE:
+- Goal: ${profile.goal}
+- Loves: ${profile.loves.join(', ')}
+- Avoid: ${profile.avoid.join(', ')}
+- Primary proteins: ${profile.proteins.join(', ')}
+- Max prep: ${profile.max_prep_minutes} minutes
+- Presentation: ${profile.presentation}
+
+CURRENT PANTRY:
+${pantryList}
+
+MEALS ALREADY EATEN (never repeat):
+${historyList}
+
+REQUEST:
+- People: ${people}
+- Ages: ${ages || 'not specified'}
+- Notes: ${notes || 'none'}
+
+RULES:
+1. Tomatoes must be a prominent ingredient.
+2. Use ONLY items currently in the pantry (basic salt/pepper assumed).
+3. Max ${profile.max_prep_minutes} minutes total.
+4. Restaurant-quality presentation — looks beautiful on the plate.
+5. Scale all quantities to ${people} ${people === 1 ? 'person' : 'people'}.
+6. Do NOT repeat any meal in the history.
+
+Return JSON in this EXACT shape:
+{"name":"Meal name","emoji":"🍽","time":"10 min","cook":"No cook","protein":"main protein","ingredients":["item — qty"],"steps":["step 1"],"dressing":"dressing recipe","plating":"plating tip"}`;
+
+  const text = await callOpenAI({
+    model: 'gpt-4o',
+    max_tokens: 2500,
+    temperature: 0.8,
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: "You are Laura's personal chef. You create one bistro-quality meal at a time using only what's in her pantry. You ALWAYS respond with valid JSON only." },
+      { role: 'user', content: userPrompt }
+    ]
+  });
+  return extractJSON(text);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -2417,14 +2545,21 @@ function maybeShowIOSInstall() {
 // ═══════════════════════════════════════════════════════════════════════
 
 (async () => {
+  document.getElementById('ver-tag').textContent = APP_VERSION;
   renderAll();
 
-  const remote = await loadDB();
-  if (JSON.stringify(remote) !== JSON.stringify(db)) {
-    db = remote;
-    renderAll();
+  try {
+    const remote = await loadDB();
+    if (JSON.stringify(remote) !== JSON.stringify(db)) {
+      db = remote;
+      renderAll();
+    }
+    subscribeToChanges();
+  } catch (e) {
+    console.error('Init error:', e);
+    setSyncStatus('error', 'Init failed');
+    showToast('Sync error — using local data');
   }
-  subscribeToChanges();
   setTimeout(maybeShowIOSInstall, 2000);
 })();
 </script>
