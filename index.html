@@ -1238,6 +1238,17 @@
       <div id="db-history"></div>
     </div>
 
+    <div class="card" id="install-card" style="display:none;">
+      <div class="card-title">📲 Install as App</div>
+      <p style="font-size:13.5px;color:var(--ink-mid);font-weight:600;line-height:1.5;margin-bottom:12px;">
+        <span id="install-status">Status: checking…</span>
+      </p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="db-install-btn" onclick="triggerInstall()">📲 Install Now</button>
+      </div>
+      <p id="install-help" style="font-size:12px;color:var(--ink-light);font-weight:600;margin-top:14px;line-height:1.5;"></p>
+    </div>
+
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">
       <button class="btn btn-ocean" onclick="exportDB()">⬇ Export</button>
       <button class="btn btn-ghost" onclick="openImportModal()">⬆ Import</button>
@@ -1415,7 +1426,7 @@
 // ── SUPABASE CLIENT ────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════
 
-const APP_VERSION = 'v4.3';
+const APP_VERSION = 'v4.4';
 const SUPABASE_URL = 'https://qdhqkcsfslkbhxtogjfp.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_bmapexcRWmRzsRvbqIJCpw_XnWaMCZL';
 const CONNECT_TIMEOUT_MS = 8000;
@@ -2565,29 +2576,81 @@ if ('serviceWorker' in navigator) {
 }
 
 let deferredInstallPrompt = null;
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+const isAndroid = /Android/i.test(navigator.userAgent);
+const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredInstallPrompt = e;
-  document.getElementById('install-banner').classList.add('show');
+  if (!isStandalone) document.getElementById('install-banner').classList.add('show');
+  refreshInstallCard();
 });
 
-document.getElementById('install-btn').addEventListener('click', async () => {
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  document.getElementById('install-banner').classList.remove('show');
+  showToast('✓ Installed! Look in your App Drawer.');
+  refreshInstallCard();
+});
+
+async function triggerInstall() {
   if (deferredInstallPrompt) {
     deferredInstallPrompt.prompt();
     const { outcome } = await deferredInstallPrompt.userChoice;
     if (outcome === 'accepted') {
       document.getElementById('install-banner').classList.remove('show');
-      showToast('Installing…');
+      showToast('Installing… check your App Drawer');
     }
     deferredInstallPrompt = null;
+    refreshInstallCard();
+  } else if (isIOS) {
+    alert('On iOS:\n\n1. Tap the Share button (square with arrow up)\n2. Scroll down and tap "Add to Home Screen"\n3. Tap "Add"');
+  } else if (isAndroid) {
+    alert('On Android:\n\n1. Tap the Chrome menu (⋮ in top right)\n2. Tap "Install app" or "Add to Home screen"\n3. Tap "Install"\n\nThe app will appear in your App Drawer (swipe up). Long-press it to drag to home screen.');
+  } else {
+    alert('Look for the install icon (⊕) in your browser\'s address bar, or open the browser menu and select "Install app".');
   }
-});
+}
 
-// iOS add-to-home prompt (Safari has no API, just instructions)
+document.getElementById('install-btn').addEventListener('click', triggerInstall);
+
+function refreshInstallCard() {
+  const card    = document.getElementById('install-card');
+  const status  = document.getElementById('install-status');
+  const btn     = document.getElementById('db-install-btn');
+  const help    = document.getElementById('install-help');
+  if (!card) return;
+  card.style.display = 'block';
+
+  if (isStandalone) {
+    status.innerHTML = '✅ <strong>Installed</strong> — you\'re using the app version right now.';
+    btn.style.display = 'none';
+    help.textContent = '';
+    return;
+  }
+
+  btn.style.display = 'inline-flex';
+
+  if (deferredInstallPrompt) {
+    status.innerHTML = '✨ Ready to install. Tap below — it\'ll go to your App Drawer.';
+    help.innerHTML = isAndroid
+      ? '<strong>After install:</strong> swipe up to open the App Drawer, find the 🍅 Laura\'s Food icon, then long-press and drag it to your home screen.'
+      : 'After install, the app opens in its own window with no browser UI.';
+  } else if (isIOS) {
+    status.innerHTML = '📱 <strong>iOS:</strong> tap Safari\'s Share button → "Add to Home Screen".';
+    help.textContent = 'iOS doesn\'t support automatic installation — Safari is the only way (not Chrome on iOS).';
+  } else if (isAndroid) {
+    status.innerHTML = '⚠️ Chrome hasn\'t prompted yet. This usually means: (a) you already installed it, or (b) you dismissed the prompt earlier.';
+    help.innerHTML = '<strong>Check your App Drawer first</strong> (swipe up from home screen) and look for "Laura\'s Food" with the 🍅 icon.<br><br>If not there: open Chrome\'s menu (⋮) → tap "Install app" or "Add to Home screen" manually.';
+  } else {
+    status.innerHTML = '⚠️ Your browser hasn\'t offered installation. Try Chrome, Edge, or Brave.';
+    help.textContent = 'Look for the install icon (⊕) in the address bar.';
+  }
+}
+
 function maybeShowIOSInstall() {
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-  const standalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
-  if (isIOS && !standalone && !sessionStorage.getItem('ios_install_shown')) {
+  if (isIOS && !isStandalone && !sessionStorage.getItem('ios_install_shown')) {
     sessionStorage.setItem('ios_install_shown', '1');
     document.getElementById('install-sub').textContent = 'Tap Share → Add to Home Screen';
     document.getElementById('install-btn').style.display = 'none';
@@ -2616,6 +2679,7 @@ function maybeShowIOSInstall() {
     showToast('Sync error — using local data');
   }
   setTimeout(maybeShowIOSInstall, 2000);
+  refreshInstallCard();
 })();
 </script>
 </body>
