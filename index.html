@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Laura's Food 🍅</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
       --tomato: #e8472a;
@@ -65,6 +66,38 @@
       padding: 6px 18px;
       font-size: 13px;
       font-weight: 600;
+    }
+
+    .sync-pill {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 50px;
+      padding: 5px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: default;
+      transition: all 0.3s;
+    }
+
+    .sync-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+
+    .sync-pill.synced .sync-dot   { background: #4ade80; }
+    .sync-pill.syncing .sync-dot  { background: #fbbf24; animation: pulse 1s infinite; }
+    .sync-pill.offline .sync-dot  { background: #f87171; }
+    .sync-pill.error .sync-dot    { background: #f87171; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
     }
 
     nav {
@@ -901,7 +934,13 @@
         <p>Restaurant-quality meals · 10 min or less</p>
       </div>
     </div>
-    <div class="week-badge" id="week-badge">Week 1</div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <div class="week-badge" id="week-badge">Week 1</div>
+      <div class="sync-pill syncing" id="sync-pill">
+        <div class="sync-dot"></div>
+        <span id="sync-label">Connecting…</span>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -1216,6 +1255,14 @@
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════
+// ── SUPABASE CLIENT ────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+
+const SUPABASE_URL = 'https://qdhqkcsfslkbhxtogjfp.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_bmapexcRWmRzsRvbqIJCpw_XnWaMCZL';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ═══════════════════════════════════════════════════════════════════════
 // ── STATIC DATA (recipes, shopping list, suggestions) ─────────────────
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -1305,8 +1352,12 @@ const WEEK2_IDEAS = [
 
 // ═══════════════════════════════════════════════════════════════════════
 // ── DATABASE ───────────────────────────────────────────────────────────
-// Section 02 (user_profile) + Section 06 (state) stored in localStorage
+// user_profile (Section 02) + state (Section 06)
+// Primary: Supabase (cross-device) · Fallback: localStorage (offline)
 // ═══════════════════════════════════════════════════════════════════════
+
+const DB_ROW_ID   = 'laura';
+const LS_KEY      = 'lauras_food_db';
 
 const DEFAULT_DB = {
   user_profile: {
@@ -1338,56 +1389,120 @@ const DEFAULT_DB = {
   }
 };
 
-function loadDB() {
+// ── Sync status indicator ─────────────────────────────────────────────
+function setSyncStatus(status, label) {
+  const pill  = document.getElementById('sync-pill');
+  const span  = document.getElementById('sync-label');
+  pill.className = `sync-pill ${status}`;
+  span.textContent = label;
+}
+
+// ── Local helpers ─────────────────────────────────────────────────────
+function loadFromLocal() {
   try {
-    const raw = localStorage.getItem('lauras_food_db');
-    if (!raw) return JSON.parse(JSON.stringify(DEFAULT_DB));
-    return JSON.parse(raw);
+    const raw = localStorage.getItem(LS_KEY);
+    return raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(DEFAULT_DB));
+  } catch { return JSON.parse(JSON.stringify(DEFAULT_DB)); }
+}
+
+function saveToLocal(data) {
+  localStorage.setItem(LS_KEY, JSON.stringify(data));
+}
+
+// ── Supabase read ─────────────────────────────────────────────────────
+async function loadFromSupabase() {
+  const { data, error } = await supabase
+    .from('app_state')
+    .select('data')
+    .eq('id', DB_ROW_ID)
+    .single();
+
+  if (error) throw error;
+  return data.data;
+}
+
+// ── Supabase write (upsert so it works on first save too) ─────────────
+async function saveToSupabase(dbObj) {
+  const { error } = await supabase
+    .from('app_state')
+    .upsert({ id: DB_ROW_ID, data: dbObj, updated_at: new Date().toISOString() },
+             { onConflict: 'id' });
+  if (error) throw error;
+}
+
+// ── Combined load (Supabase first, localStorage fallback) ─────────────
+async function loadDB() {
+  setSyncStatus('syncing', 'Syncing…');
+  try {
+    const remote = await loadFromSupabase();
+    saveToLocal(remote);           // keep local in sync
+    setSyncStatus('synced', 'Synced ✓');
+    return remote;
   } catch (e) {
-    return JSON.parse(JSON.stringify(DEFAULT_DB));
+    console.warn('Supabase load failed, using local:', e.message);
+    setSyncStatus('offline', 'Offline (local)');
+    return loadFromLocal();
   }
 }
 
-function saveDB() {
-  localStorage.setItem('lauras_food_db', JSON.stringify(db));
+// ── Combined save (Supabase + localStorage) ───────────────────────────
+async function saveDB() {
+  saveToLocal(db);                 // always save locally first (instant)
+  setSyncStatus('syncing', 'Saving…');
+  try {
+    await saveToSupabase(db);
+    setSyncStatus('synced', 'Synced ✓');
+  } catch (e) {
+    console.warn('Supabase save failed:', e.message);
+    setSyncStatus('offline', 'Saved locally');
+  }
 }
 
-function resetDB() {
-  if (!confirm('Reset the database to defaults? This will clear shopping checks and pantry flags.')) return;
-  db = JSON.parse(JSON.stringify(DEFAULT_DB));
-  saveDB();
-  renderAll();
-  showToast('Database reset to defaults');
+// ── Real-time subscription: another device saved → refresh here ───────
+function subscribeToChanges() {
+  supabase
+    .channel('app_state_changes')
+    .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'app_state', filter: `id=eq.${DB_ROW_ID}` },
+        (payload) => {
+          const remote = payload.new.data;
+          if (JSON.stringify(remote) !== JSON.stringify(db)) {
+            db = remote;
+            saveToLocal(db);
+            renderAll();
+            setSyncStatus('synced', 'Synced ✓');
+            showToast('📲 Updated from another device');
+          }
+        })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') setSyncStatus('synced', 'Live sync ✓');
+    });
 }
 
+// ── Export / Import ───────────────────────────────────────────────────
 function exportDB() {
   const json = JSON.stringify(db, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'lauras_food_db.json';
-  a.click();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'lauras_food_db.json'; a.click();
   URL.revokeObjectURL(url);
   showToast('Database exported!');
 }
 
-function openImportModal() {
-  document.getElementById('import-modal').classList.add('open');
-}
-
+function openImportModal() { document.getElementById('import-modal').classList.add('open'); }
 function closeImportModal() {
   document.getElementById('import-modal').classList.remove('open');
   document.getElementById('import-textarea').value = '';
 }
 
-function importDB() {
+async function importDB() {
   try {
     const raw = document.getElementById('import-textarea').value.trim();
     const imported = JSON.parse(raw);
     if (!imported.state || !imported.user_profile) throw new Error('Invalid format');
     db = imported;
-    saveDB();
+    await saveDB();
     renderAll();
     closeImportModal();
     showToast('Database imported successfully!');
@@ -1396,11 +1511,19 @@ function importDB() {
   }
 }
 
+async function resetDB() {
+  if (!confirm('Reset the database to defaults? This will clear shopping checks and pantry flags.')) return;
+  db = JSON.parse(JSON.stringify(DEFAULT_DB));
+  await saveDB();
+  renderAll();
+  showToast('Database reset to defaults');
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // ── STATE ──────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════
 
-let db = loadDB();
+let db = loadFromLocal();    // start with local data (instant, no flicker)
 let currentDay = 0;
 let currentFilter = 'all';
 
@@ -1537,13 +1660,14 @@ function renderPantryGrid(containerId) {
   }).join('');
 }
 
-function togglePantry(safeId, item) {
+async function togglePantry(safeId, item) {
   const wasEmpty = isPantryEmpty(item);
   setPantryEmpty(item, !wasEmpty);
   renderPantry();
   renderShoppingList();
   renderDatabase();
   updateOverviewStats();
+  await saveDB();
   showToast(!wasEmpty ? `${item} marked as empty` : `${item} back in stock`);
 }
 
@@ -1580,15 +1704,16 @@ function renderShoppingList() {
   }
 }
 
-function toggleShopping(item) {
+async function toggleShopping(item) {
   setShoppingChecked(item, !isShoppingChecked(item));
   renderShoppingList();
+  await saveDB();
 }
 
-function clearChecked() {
+async function clearChecked() {
   db.state.shopping_checked = {};
-  saveDB();
   renderShoppingList();
+  await saveDB();
   showToast('Shopping list reset');
 }
 
@@ -1757,8 +1882,21 @@ document.getElementById('import-modal').addEventListener('click', function(e) {
 });
 
 // ─── Init ─────────────────────────────────────────────────────────────
+// 1. Render immediately from localStorage (no flicker)
 renderAll();
 setDay(0);
+
+// 2. Load from Supabase in the background and refresh if data differs
+(async () => {
+  const remote = await loadDB();   // sets sync status, returns remote data
+  if (JSON.stringify(remote) !== JSON.stringify(db)) {
+    db = remote;
+    renderAll();
+    setDay(currentDay);
+  }
+  // 3. Subscribe to real-time updates from other devices
+  subscribeToChanges();
+})();
 </script>
 </body>
 </html>
