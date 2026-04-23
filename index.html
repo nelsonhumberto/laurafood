@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Laura's Food 🍅</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <style>
     :root {
       --tomato: #e8472a;
@@ -1260,7 +1260,18 @@
 
 const SUPABASE_URL = 'https://qdhqkcsfslkbhxtogjfp.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_bmapexcRWmRzsRvbqIJCpw_XnWaMCZL';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const CONNECT_TIMEOUT_MS = 8000;
+
+let sbClient = null;
+try {
+  // The CDN UMD build exposes window.supabase = { createClient, ... }
+  const { createClient } = window.supabase;
+  sbClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
+    realtime: { params: { eventsPerSecond: 2 } }
+  });
+} catch (e) {
+  console.error('Supabase SDK failed to load:', e);
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 // ── STATIC DATA (recipes, shopping list, suggestions) ─────────────────
@@ -1409,21 +1420,35 @@ function saveToLocal(data) {
   localStorage.setItem(LS_KEY, JSON.stringify(data));
 }
 
-// ── Supabase read ─────────────────────────────────────────────────────
+// ── Supabase read (with timeout) ──────────────────────────────────────
 async function loadFromSupabase() {
-  const { data, error } = await supabase
+  if (!sbClient) throw new Error('SDK not loaded');
+
+  const fetchPromise = sbClient
     .from('app_state')
     .select('data')
     .eq('id', DB_ROW_ID)
-    .single();
+    .single()
+    .then(({ data, error }) => {
+      if (error) throw error;
+      if (!data || !data.data || Object.keys(data.data).length === 0) {
+        // Row exists but is empty — push defaults up
+        throw Object.assign(new Error('empty_row'), { code: 'EMPTY' });
+      }
+      return data.data;
+    });
 
-  if (error) throw error;
-  return data.data;
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('timeout')), CONNECT_TIMEOUT_MS)
+  );
+
+  return Promise.race([fetchPromise, timeoutPromise]);
 }
 
 // ── Supabase write (upsert so it works on first save too) ─────────────
 async function saveToSupabase(dbObj) {
-  const { error } = await supabase
+  if (!sbClient) throw new Error('SDK not loaded');
+  const { error } = await sbClient
     .from('app_state')
     .upsert({ id: DB_ROW_ID, data: dbObj, updated_at: new Date().toISOString() },
              { onConflict: 'id' });
@@ -1432,15 +1457,32 @@ async function saveToSupabase(dbObj) {
 
 // ── Combined load (Supabase first, localStorage fallback) ─────────────
 async function loadDB() {
+  if (!sbClient) {
+    setSyncStatus('error', 'SDK error');
+    return loadFromLocal();
+  }
+
   setSyncStatus('syncing', 'Syncing…');
   try {
     const remote = await loadFromSupabase();
-    saveToLocal(remote);           // keep local in sync
+    saveToLocal(remote);
     setSyncStatus('synced', 'Synced ✓');
     return remote;
   } catch (e) {
-    console.warn('Supabase load failed, using local:', e.message);
-    setSyncStatus('offline', 'Offline (local)');
+    console.warn('Supabase load failed:', e.message, e.code);
+
+    // Table missing — tell the user exactly what to do
+    if (e.code === 'PGRST205' || e.message?.includes('app_state')) {
+      setSyncStatus('error', '⚠ Run setup SQL');
+      showSetupBanner();
+      return loadFromLocal();
+    }
+
+    if (e.message === 'timeout') {
+      setSyncStatus('offline', 'Timeout — local');
+    } else {
+      setSyncStatus('offline', 'Offline (local)');
+    }
     return loadFromLocal();
   }
 }
@@ -1448,6 +1490,7 @@ async function loadDB() {
 // ── Combined save (Supabase + localStorage) ───────────────────────────
 async function saveDB() {
   saveToLocal(db);                 // always save locally first (instant)
+  if (!sbClient) return;
   setSyncStatus('syncing', 'Saving…');
   try {
     await saveToSupabase(db);
@@ -1460,7 +1503,8 @@ async function saveDB() {
 
 // ── Real-time subscription: another device saved → refresh here ───────
 function subscribeToChanges() {
-  supabase
+  if (!sbClient) return;
+  sbClient
     .channel('app_state_changes')
     .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'app_state', filter: `id=eq.${DB_ROW_ID}` },
@@ -1470,13 +1514,39 @@ function subscribeToChanges() {
             db = remote;
             saveToLocal(db);
             renderAll();
-            setSyncStatus('synced', 'Synced ✓');
+            setSyncStatus('synced', 'Live sync ✓');
             showToast('📲 Updated from another device');
           }
         })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') setSyncStatus('synced', 'Live sync ✓');
+      if (status === 'CHANNEL_ERROR') setSyncStatus('offline', 'Offline (local)');
     });
+}
+
+// ── Setup banner shown when table doesn't exist yet ───────────────────
+function showSetupBanner() {
+  if (document.getElementById('setup-banner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'setup-banner';
+  banner.style.cssText = `
+    position:fixed; bottom:0; left:0; right:0; z-index:500;
+    background:#1e40af; color:white; padding:16px 24px;
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+    font-size:14px; font-weight:600; box-shadow:0 -4px 20px rgba(0,0,0,0.2);
+  `;
+  banner.innerHTML = `
+    <span>⚠ Database table not found.</span>
+    <a href="https://supabase.com/dashboard/project/qdhqkcsfslkbhxtogjfp/editor"
+       target="_blank" rel="noopener"
+       style="background:white;color:#1e40af;border-radius:50px;padding:8px 18px;text-decoration:none;font-weight:700;white-space:nowrap;">
+      Open SQL Editor ↗
+    </a>
+    <span style="opacity:0.8;font-weight:400">Run the <code>supabase_setup.sql</code> file, then refresh this page.</span>
+    <button onclick="document.getElementById('setup-banner').remove()"
+      style="margin-left:auto;background:none;border:none;color:white;font-size:20px;cursor:pointer;opacity:0.7">✕</button>
+  `;
+  document.body.appendChild(banner);
 }
 
 // ── Export / Import ───────────────────────────────────────────────────
