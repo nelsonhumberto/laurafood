@@ -25,7 +25,7 @@ Single-file HTML app — no build step, no dependencies, no backend required. Op
 
 ## Live App
 
-Deployed via GitHub Pages: [View App](https://nmedina.github.io/laurafood)
+Deployed via GitHub Pages: [View App](https://nelsonhumberto.github.io/laurafood/)
 
 ## Generating New Weeks
 
